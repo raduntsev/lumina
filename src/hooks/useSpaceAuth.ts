@@ -83,10 +83,6 @@ export function useSpaceAuth() {
             error:     null,
           }));
 
-          // If new user has no space, they'll be prompted to create/join
-          if (event === 'SIGNED_IN' && !profile?.space_id) {
-            router.push('/onboarding');
-          }
         } else {
           setState(s => ({ ...s, user: null, session: null, profile: null, spaceId: null, isLoading: false }));
         }

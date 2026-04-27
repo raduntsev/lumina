@@ -10,16 +10,39 @@ export default function AuthCallback() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    // 1. Принудительно проверяем сессию сразу при загрузке (решает проблему бесконечной загрузки)
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
+    const handleAuth = async () => {
+      // 1. Проверяем, есть ли защитный код (PKCE) в ссылке из письма
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+
+      if (code) {
+        // Обмениваем код на ключи доступа
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          setErrorMsg(error.message);
+        } else {
+          router.push('/');
+        }
+        return;
+      }
+
+      // 2. Запасной вариант: проверяем, может сессия уже есть
+      const { data: { session }, error } = await supabase.auth.getSession();
       if (error) {
         setErrorMsg(error.message);
       } else if (session) {
         router.push('/');
+      } else {
+        // Если кода нет и сессии нет — не даем странице виснуть вечно
+        setTimeout(() => {
+          setErrorMsg("Ссылка недействительна или срок её действия истек. Попробуйте отправить её заново.");
+        }, 4000);
       }
-    });
+    };
 
-    // 2. Оставляем слушатель на случай, если интернет медленный и токен обрабатывается с задержкой
+    handleAuth();
+
+    // Страховочный слушатель
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' || session) {
         router.push('/');
@@ -43,7 +66,7 @@ export default function AuthCallback() {
             <p className="text-sm text-gray-500">{errorMsg}</p>
             <button
               onClick={() => router.push('/')}
-              className="mt-4 w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-black transition-colors"
+              className="mt-4 w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-black transition-colors shadow-sm"
             >
               Вернуться на главную
             </button>
