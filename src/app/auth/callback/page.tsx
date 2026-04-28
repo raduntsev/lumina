@@ -3,90 +3,67 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabase';
-import { Loader2, AlertCircle } from 'lucide-react';
 
 export default function AuthCallback() {
   const router = useRouter();
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
-    // 1. Сначала проверяем URL: не "съел" ли токен какой-нибудь бот мессенджера
-    if (typeof window !== 'undefined') {
-      const hash = window.location.hash;
-      if (hash && hash.includes('error=')) {
-        const hashParams = new URLSearchParams(hash.substring(1));
-        const errorDescription = hashParams.get('error_description');
-        if (errorDescription) {
-          setErrorMsg(decodeURIComponent(errorDescription).replace(/\+/g, ' '));
-          return; // Останавливаем выполнение, так как уже есть ошибка
-        }
+    // 1. Защита от ботов: проверяем URL на наличие ошибки
+    if (typeof window !== 'undefined' && window.location.hash.includes('error=')) {
+      const params = new URLSearchParams(window.location.hash.substring(1));
+      const desc = params.get('error_description');
+      if (desc && mounted) {
+        // Если ссылка протухла, показываем текст, а не крутим загрузку
+        setError(decodeURIComponent(desc).replace(/\+/g, ' '));
+        return;
       }
     }
 
-    // 2. Стандартная проверка сессии
-    const checkSession = async () => {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (error && mounted) {
-        setErrorMsg(error.message);
-        return;
-      }
+    // 2. Если мы уже вошли, сразу кидаем на главную
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (session && mounted) {
-        router.push('/');
-      }
-    };
-
-    checkSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if ((event === 'SIGNED_IN' || session) && mounted) {
         router.push('/');
       }
     });
 
-    const timer = setTimeout(() => {
-      if (mounted && !errorMsg) {
-        setErrorMsg("Время ожидания истекло. Пожалуйста, убедитесь, что вы перешли по ссылке из почты, а не из мессенджера.");
+    // 3. Слушаем момент применения токена
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session && mounted) {
+        router.push('/');
       }
-    }, 5000);
+    });
 
     return () => {
       mounted = false;
-      clearTimeout(timer);
       subscription.unsubscribe();
     };
-  }, [router, errorMsg]);
+  }, [router]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-      <div className="bg-white p-8 border border-gray-200 rounded-2xl shadow-sm flex flex-col items-center gap-4 text-center w-full max-w-sm">
-        {errorMsg ? (
-          <>
-            <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center mb-2">
-              <AlertCircle className="w-6 h-6 text-red-500" />
-            </div>
-            <h2 className="text-lg font-semibold text-gray-900">Сбой авторизации</h2>
-            <p className="text-sm text-gray-500">
-              {errorMsg === 'Email link is invalid or has expired' 
-                ? 'Эта ссылка уже была использована (возможно, предпросмотром мессенджера). Запросите новую и откройте её напрямую из почты.' 
-                : errorMsg}
-            </p>
-            <button
-              onClick={() => router.push('/')}
-              className="mt-4 w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-black transition-colors"
-            >
-              На главную
-            </button>
-          </>
-        ) : (
-          <>
-            <Loader2 className="w-8 h-8 text-terra-500 animate-spin mb-2" />
-            <h2 className="text-lg font-semibold text-gray-900">Вход в систему...</h2>
-            <p className="text-sm text-gray-500">Синхронизируем ключи доступа</p>
-          </>
-        )}
-      </div>
+    <div className="min-h-screen bg-milk flex items-center justify-center p-6 text-center">
+      {error ? (
+        <div className="flex flex-col items-center gap-6 max-w-xs">
+          <div className="text-red-600/80 text-sm font-medium">
+            Эта ссылка устарела или уже была использована.<br />Пожалуйста, запросите новую.
+          </div>
+          <button
+            onClick={() => router.push('/')}
+            className="px-6 py-2.5 bg-gray-900 text-white rounded-xl text-xs uppercase tracking-wider hover:bg-black transition-colors"
+          >
+            Вернуться
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-1.5 h-1.5 bg-terra/40 animate-ping rounded-full" />
+          <span className="text-[10px] uppercase tracking-[0.3em] opacity-40">
+            Синхронизация ключей...
+          </span>
+        </div>
+      )}
     </div>
   );
 }

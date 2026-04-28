@@ -43,25 +43,29 @@ export function useSpaceAuth() {
   useEffect(() => {
     let mounted = true;
 
-    const init = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (!mounted) return;
-
-        // Если сессии нет или произошла ошибка с токеном, прекращаем загрузку
-        if (error || !session?.user) {
-          setState(s => ({ ...s, isLoading: false }));
-          return;
+    // Единая функция загрузки данных профиля, которая ГАРАНТИРОВАННО выключает лоадер
+    const loadData = async (session: Session | null) => {
+      if (!session?.user) {
+        if (mounted) {
+          setState(s => ({ ...s, user: null, session: null, profile: null, spaceId: null, isLoading: false }));
         }
+        return;
+      }
 
-        const profile = await fetchProfile(session.user.id);
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id, space_id, display_name, avatar_url, total_balance')
+          .eq('id', session.user.id)
+          .single();
+
         if (mounted) {
           setState(s => ({
             ...s,
             user:      session.user,
-            session,
-            profile,
-            spaceId:   profile?.space_id ?? null,
+            session:   session,
+            profile:   profile || null,
+            spaceId:   profile?.space_id || null,
             isLoading: false,
             error:     null,
           }));
@@ -73,39 +77,21 @@ export function useSpaceAuth() {
       }
     };
 
-    init();
+    // Инициализация при первой загрузке
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (mounted) loadData(session);
+    });
 
-    // Subscribe to auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!mounted) return;
-
-        if (event === 'SIGNED_OUT' || !session) {
-          // Выход или смерть токена (например, из-за конфликта в localStorage)
-          setState(s => ({ ...s, user: null, session: null, profile: null, spaceId: null, isLoading: false }));
-        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || session?.user) {
-          // Вход или обновление сессии
-          const profile = await fetchProfile(session.user.id);
-          if (mounted) {
-            setState(s => ({
-              ...s,
-              user:      session.user,
-              session,
-              profile,
-              spaceId:   profile?.space_id ?? null,
-              isLoading: false,
-              error:     null,
-            }));
-          }
-        }
-      }
-    );
+    // Слушатель изменений (вход, выход, обновление токена)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (mounted) loadData(session);
+    });
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [router]);
+  }, []);
 
   // ── STEP 1: Send magic link to email ─────────────────────────────────────
 
@@ -128,7 +114,6 @@ export function useSpaceAuth() {
     if (!state.user) return null;
     setState(s => ({ ...s, isLoading: true, error: null }));
 
-    // Create the space
     const { data: space, error: spaceError } = await supabase
       .from('spaces')
       .insert({ name: spaceName ?? 'Our Space' })
@@ -140,7 +125,6 @@ export function useSpaceAuth() {
       return null;
     }
 
-    // Bind creator's profile to this space
     const { error: profileError } = await supabase
       .from('profiles')
       .update({ space_id: space.id })
@@ -151,7 +135,6 @@ export function useSpaceAuth() {
       return null;
     }
 
-    // Initialize wallet for the space
     await supabase.from('wallet').insert({ space_id: space.id, balance: 0 });
 
     setState(s => ({
@@ -170,7 +153,6 @@ export function useSpaceAuth() {
     if (!state.user) return false;
     setState(s => ({ ...s, isLoading: true, error: null }));
 
-    // Find the space
     const { data: space, error: findError } = await supabase
       .from('spaces')
       .select('id, invite_code')
@@ -186,7 +168,6 @@ export function useSpaceAuth() {
       return false;
     }
 
-    // Verify space doesn't already have 2 members
     const { count } = await supabase
       .from('profiles')
       .select('id', { count: 'exact', head: true })
@@ -201,7 +182,6 @@ export function useSpaceAuth() {
       return false;
     }
 
-    // Bind partner to this space
     const { error: joinError } = await supabase
       .from('profiles')
       .update({ space_id: space.id })
@@ -254,15 +234,4 @@ export function useSpaceAuth() {
     isAuthenticated: !!state.user,
     hasSpace:        !!state.spaceId,
   };
-}
-
-// ── Private helpers ───────────────────────────────────────────────────────────
-
-async function fetchProfile(userId: string): Promise<Profile | null> {
-  const { data } = await supabase
-    .from('profiles')
-    .select('id, space_id, display_name, avatar_url, total_balance')
-    .eq('id', userId)
-    .single();
-  return data;
 }
