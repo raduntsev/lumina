@@ -459,7 +459,7 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                                     <span className="text-xs font-medium text-gray-400">{new Date(p.created_at).toLocaleDateString('ru-RU')}</span>
                                     <button 
                                       onClick={() => handleFulfill(p.id)} 
-                                      className="text-sm px-4 py-2 rounded-xl bg-terra-500 text-white font-medium cursor-pointer hover:bg-terra-600 transition-colors shadow-sm"
+                                      className="text-sm px-4 py-2 rounded-xl bg-terra-500 text-black font-medium cursor-pointer hover:bg-terra-600 transition-colors shadow-sm"
                                     >
                                       Завершить
                                     </button>

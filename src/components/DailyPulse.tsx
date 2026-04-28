@@ -477,7 +477,7 @@ export function DailyPulse() {
                 </div>
                 <div className="flex gap-4">
                   <div className="relative group">
-                    <button onClick={() => { setMyIntimacy(!myIntimacy); saveMetrics(myMood, !myIntimacy, myConflict); }} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${myIntimacy ? 'bg-terra-500 text-white shadow-md shadow-terra-500/20' : 'bg-white border border-gray-200 text-gray-400 hover:border-terra-300 hover:text-terra-500'}`}><Heart className={`w-5 h-5 ${myIntimacy ? 'fill-white' : ''}`} /></button>
+                    <button onClick={() => { setMyIntimacy(!myIntimacy); saveMetrics(myMood, !myIntimacy, myConflict); }} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${myIntimacy ? 'bg-terra-500 text-white shadow-md shadow-terra-500/20' : 'bg-white border border-gray-200 text-gray-400 hover:border-terra-300 hover:text-gray-900'}`}><Heart className={`w-5 h-5 ${myIntimacy ? 'fill-white' : ''}`} /></button>
                     <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">Близость</span>
                   </div>
                   <div className="relative group">
