@@ -6,6 +6,7 @@ import { X, Store, Plus, CheckCircle2, Clock, Sparkles, Loader2 } from 'lucide-r
 import supabase from '@/lib/supabase';
 import { useSpaceAuth } from '@/hooks/useSpaceAuth';
 
+
 interface ShopItem {
   id: string;
   creator_id: string;
@@ -43,6 +44,9 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
   const [requests, setRequests] = useState<ShopRequest[]>([]);
   const [balance, setBalance] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Добавлен стейт для лимита истории
+  const [historyLimit, setHistoryLimit] = useState(5);
 
   // Формы
   const [newTitle, setNewTitle] = useState('');
@@ -89,7 +93,10 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
   }, [spaceId, currentUserId]);
 
   useEffect(() => {
-    if (isOpen) fetchData();
+    if (isOpen) {
+      fetchData();
+      setHistoryLimit(5); // Сбрасываем лимит при открытии
+    }
   }, [isOpen, fetchData]);
 
   const partnerItems = items.filter(i => i.creator_id !== currentUserId);
@@ -203,7 +210,8 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                   <span className="text-sm font-medium text-gray-500">Ваш баланс:</span>
                   <span className="text-xl font-semibold text-terra-600">{balance} <span className="text-sm text-terra-500/70 font-medium">баллов</span></span>
                 </div>
-                <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors cursor-pointer text-gray-400 hover:text-gray-900 hidden sm:block">
+                {/* Убран класс hidden sm:block, чтобы крестик был виден всегда */}
+                <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors cursor-pointer text-gray-400 hover:text-gray-900">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -422,68 +430,118 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                     </div>
                   )}
 
-                  {/* ИСТОРИЯ ЗАКАЗОВ */}
-                  {activeTab === 'history' && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
-                      
-                      {/* Нужно выполнить */}
-                      <div className="space-y-4">
-                        <p className="text-sm font-medium text-terra-600 flex items-center gap-2">
-                          Нужно выполнить {pendingOrdersCount > 0 && <span className="w-2 h-2 bg-terra-500 rounded-full animate-pulse" />}
-                        </p>
-                        {boughtFromMe.length === 0 ? <p className="text-sm text-gray-400 py-12 border border-dashed border-gray-200 bg-white text-center rounded-2xl">У вас еще ничего не заказали</p> : (
-                          <div className="space-y-4">
-                            {boughtFromMe.map(p => (
-                              <div key={p.id} className={`p-5 rounded-2xl border transition-all ${p.is_fulfilled ? 'border-gray-100 bg-gray-50/50 opacity-60' : 'border-terra-200 bg-white shadow-sm'}`}>
-                                <div className="flex justify-between items-start mb-4">
-                                  <h4 className={`text-base font-semibold text-gray-900 ${p.is_fulfilled ? 'line-through text-gray-500' : ''}`}>{p.title}</h4>
-                                  <span className="text-xs font-bold text-terra-600 px-2.5 py-1 bg-terra-50 rounded-lg">+{p.cost}</span>
-                                </div>
-                                <div className="flex justify-between items-center pt-4 border-t border-gray-100">
-                                  <span className="text-xs font-medium text-gray-400">{new Date(p.created_at).toLocaleDateString('ru-RU')}</span>
-                                  {!p.is_fulfilled ? (
+                  {/* ИСТОРИЯ ЗАКАЗОВ (РАЗДЕЛЕННАЯ С ЛИМИТАМИ) */}
+                  {activeTab === 'history' && (() => {
+                    const pendingFromMe = boughtFromMe.filter(p => !p.is_fulfilled);
+                    const fulfilledFromMe = boughtFromMe.filter(p => p.is_fulfilled);
+                    
+                    const pendingIBought = iBought.filter(p => !p.is_fulfilled);
+                    const fulfilledIBought = iBought.filter(p => p.is_fulfilled);
+
+                    return (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
+                        
+                        {/* Нужно выполнить */}
+                        <div className="space-y-4">
+                          <p className="text-sm font-medium text-terra-600 flex items-center gap-2">
+                            Нужно выполнить {pendingOrdersCount > 0 && <span className="w-2 h-2 bg-terra-500 rounded-full animate-pulse" />}
+                          </p>
+                          {boughtFromMe.length === 0 ? <p className="text-sm text-gray-400 py-12 border border-dashed border-gray-200 bg-white text-center rounded-2xl">У вас еще ничего не заказали</p> : (
+                            <div className="space-y-4">
+                              {/* Ожидающие (все) */}
+                              {pendingFromMe.map(p => (
+                                <div key={p.id} className="p-5 rounded-2xl border transition-all border-terra-200 bg-white shadow-sm">
+                                  <div className="flex justify-between items-start mb-4">
+                                    <h4 className="text-base font-semibold text-gray-900">{p.title}</h4>
+                                    <span className="text-xs font-bold text-terra-600 px-2.5 py-1 bg-terra-50 rounded-lg">+{p.cost}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center pt-4 border-t border-gray-100">
+                                    <span className="text-xs font-medium text-gray-400">{new Date(p.created_at).toLocaleDateString('ru-RU')}</span>
                                     <button 
                                       onClick={() => handleFulfill(p.id)} 
                                       className="text-sm px-4 py-2 rounded-xl bg-terra-500 text-white font-medium cursor-pointer hover:bg-terra-600 transition-colors shadow-sm"
                                     >
                                       Завершить
                                     </button>
-                                  ) : (
+                                  </div>
+                                </div>
+                              ))}
+                              
+                              {/* Завершенные (обрезанные лимитом) */}
+                              {fulfilledFromMe.slice(0, historyLimit).map(p => (
+                                <div key={p.id} className="p-5 rounded-2xl border transition-all border-gray-100 bg-gray-50/50 opacity-60">
+                                  <div className="flex justify-between items-start mb-4">
+                                    <h4 className="text-base font-semibold text-gray-900 line-through text-gray-500">{p.title}</h4>
+                                    <span className="text-xs font-bold text-terra-600 px-2.5 py-1 bg-terra-50 rounded-lg">+{p.cost}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center pt-4 border-t border-gray-100">
+                                    <span className="text-xs font-medium text-gray-400">{new Date(p.created_at).toLocaleDateString('ru-RU')}</span>
                                     <span className="text-xs text-gray-500 flex items-center gap-1.5 font-medium"><CheckCircle2 className="w-4 h-4 text-gray-400"/> Выполнено</span>
-                                  )}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                              ))}
 
-                      {/* Ваши покупки */}
-                      <div className="space-y-4">
-                        <p className="text-sm font-medium text-gray-500">Ваши покупки</p>
-                        {iBought.length === 0 ? <p className="text-sm text-gray-400 py-12 border border-dashed border-gray-200 bg-white text-center rounded-2xl">Вы еще ничего не купили</p> : (
-                          <div className="space-y-4">
-                            {iBought.map(p => (
-                              <div key={p.id} className="p-5 border border-gray-200 bg-white rounded-2xl flex items-center justify-between shadow-sm">
-                                <div>
-                                  <h4 className={`text-base font-semibold text-gray-900 ${p.is_fulfilled ? 'opacity-50 line-through' : ''}`}>{p.title}</h4>
-                                  <span className="text-xs font-medium text-gray-400 mt-1 block">{new Date(p.created_at).toLocaleDateString('ru-RU')}</span>
-                                </div>
-                                <div className="flex flex-col items-end gap-2">
-                                  <span className="text-sm font-semibold text-gray-900 bg-gray-100 px-2 py-1 rounded-lg">-{p.cost} pts</span>
-                                  {p.is_fulfilled ? (
-                                    <span className="text-xs text-terra-500 font-medium flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4"/> Получено</span>
-                                  ) : (
+                              {/* Кнопка "Показать еще" */}
+                              {fulfilledFromMe.length > historyLimit && (
+                                <button 
+                                  onClick={() => setHistoryLimit(prev => prev + 5)}
+                                  className="w-full py-3 mt-2 text-sm text-gray-600 font-medium bg-gray-50 rounded-xl hover:bg-gray-100 border border-gray-200 transition-colors cursor-pointer"
+                                >
+                                  Показать еще завершенные...
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Ваши покупки */}
+                        <div className="space-y-4">
+                          <p className="text-sm font-medium text-gray-500">Ваши покупки</p>
+                          {iBought.length === 0 ? <p className="text-sm text-gray-400 py-12 border border-dashed border-gray-200 bg-white text-center rounded-2xl">Вы еще ничего не купили</p> : (
+                            <div className="space-y-4">
+                              {/* Ожидающие (все) */}
+                              {pendingIBought.map(p => (
+                                <div key={p.id} className="p-5 border border-gray-200 bg-white rounded-2xl flex items-center justify-between shadow-sm">
+                                  <div>
+                                    <h4 className="text-base font-semibold text-gray-900">{p.title}</h4>
+                                    <span className="text-xs font-medium text-gray-400 mt-1 block">{new Date(p.created_at).toLocaleDateString('ru-RU')}</span>
+                                  </div>
+                                  <div className="flex flex-col items-end gap-2">
+                                    <span className="text-sm font-semibold text-gray-900 bg-gray-100 px-2 py-1 rounded-lg">-{p.cost} pts</span>
                                     <span className="text-xs flex items-center gap-1.5 text-gray-400 font-medium"><Clock className="w-4 h-4" /> Ожидаем</span>
-                                  )}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                              ))}
+
+                              {/* Полученные (обрезанные лимитом) */}
+                              {fulfilledIBought.slice(0, historyLimit).map(p => (
+                                <div key={p.id} className="p-5 border border-gray-200 bg-white rounded-2xl flex items-center justify-between shadow-sm opacity-60">
+                                  <div>
+                                    <h4 className="text-base font-semibold text-gray-900 opacity-50 line-through">{p.title}</h4>
+                                    <span className="text-xs font-medium text-gray-400 mt-1 block">{new Date(p.created_at).toLocaleDateString('ru-RU')}</span>
+                                  </div>
+                                  <div className="flex flex-col items-end gap-2">
+                                    <span className="text-sm font-semibold text-gray-900 bg-gray-100 px-2 py-1 rounded-lg">-{p.cost} pts</span>
+                                    <span className="text-xs text-terra-500 font-medium flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4"/> Получено</span>
+                                  </div>
+                                </div>
+                              ))}
+
+                              {/* Кнопка "Показать еще" */}
+                              {fulfilledIBought.length > historyLimit && (
+                                <button 
+                                  onClick={() => setHistoryLimit(prev => prev + 5)}
+                                  className="w-full py-3 mt-2 text-sm text-gray-600 font-medium bg-gray-50 rounded-xl hover:bg-gray-100 border border-gray-200 transition-colors cursor-pointer"
+                                >
+                                  Показать еще полученные...
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </>
               )}
             </div>

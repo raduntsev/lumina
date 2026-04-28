@@ -20,7 +20,7 @@ interface Task {
 interface DailyMetric {
   user_id: string;
   date: string;
-  mood_score: number;
+  mood_score: number | null; // Теперь может быть null
   has_intimacy: boolean;
   has_conflict: boolean;
 }
@@ -80,8 +80,8 @@ export function DailyPulse() {
   const [newSetTitle, setNewSetTitle] = useState('');
   const [newSetTasks, setNewSetTasks] = useState<TemplateTask[]>([{ content: '', points: 1 }]);
 
-  // Метрики
-  const [myMood, setMyMood] = useState<number>(5);
+  // Метрики (Настроение теперь может быть null для бесцветных дней)
+  const [myMood, setMyMood] = useState<number | null>(null);
   const [myIntimacy, setMyIntimacy] = useState(false);
   const [myConflict, setMyConflict] = useState(false);
 
@@ -187,11 +187,12 @@ export function DailyPulse() {
     if (myTodayMetric) {
       setMyMood(myTodayMetric.mood_score); setMyIntimacy(myTodayMetric.has_intimacy); setMyConflict(myTodayMetric.has_conflict);
     } else {
-      setMyMood(5); setMyIntimacy(false); setMyConflict(false);
+      setMyMood(null); setMyIntimacy(false); setMyConflict(false);
     }
   }, [selectedDate, monthData, currentUserId]);
 
-  const saveMetrics = async (val: number, intim: boolean, conf: boolean) => {
+  // Обновлен для работы с null
+  const saveMetrics = async (val: number | null, intim: boolean, conf: boolean) => {
     if (!spaceId || !currentUserId) return;
     await supabase.from('daily_metrics').upsert({
       space_id: spaceId, user_id: currentUserId, date: format(selectedDate, 'yyyy-MM-dd'), mood_score: val, has_intimacy: intim, has_conflict: conf
@@ -299,16 +300,26 @@ export function DailyPulse() {
     const myMetric = data.metrics.find(m => m.user_id === currentUserId);
     const partnerMetric = data.metrics.find(m => m.user_id !== currentUserId);
 
-    const myOpacity = myMetric ? (myMetric.mood_score / 10) * 0.8 : 0;
-    const partnerOpacity = partnerMetric ? (partnerMetric.mood_score / 10) * 0.8 : 0;
+    const myScore = myMetric?.mood_score ?? null;
+    const partnerScore = partnerMetric?.mood_score ?? null;
+
+    const myOpacity = myScore !== null ? (myScore / 10) * 0.8 : 0;
+    const partnerOpacity = partnerScore !== null ? (partnerScore / 10) * 0.8 : 0;
 
     const myColor = `rgba(230, 57, 70, ${myOpacity})`;
     const partnerColor = `rgba(17, 24, 39, ${partnerOpacity})`; // gray-900
 
-    if (viewMode === 'my') return { backgroundColor: myMetric ? myColor : 'transparent' };
-    if (viewMode === 'partner') return { backgroundColor: partnerMetric ? partnerColor : 'transparent' };
-    if (myMetric && partnerMetric) return { background: `linear-gradient(90deg, ${myColor} 50%, ${partnerColor} 50%)` };
-    return { backgroundColor: myMetric ? myColor : partnerColor };
+    if (viewMode === 'my') return { backgroundColor: myMetric && myScore !== null ? myColor : 'transparent' };
+    if (viewMode === 'partner') return { backgroundColor: partnerMetric && partnerScore !== null ? partnerColor : 'transparent' };
+    
+    if (myMetric && myScore !== null && partnerMetric && partnerScore !== null) {
+      return { background: `linear-gradient(90deg, ${myColor} 50%, ${partnerColor} 50%)` };
+    }
+    
+    if (myMetric && myScore !== null) return { backgroundColor: myColor };
+    if (partnerMetric && partnerScore !== null) return { backgroundColor: partnerColor };
+    
+    return { backgroundColor: 'transparent' };
   };
 
   if (isAuthLoading) return <div className="flex h-full w-full items-center justify-center bg-gray-50 text-gray-400 text-sm font-medium animate-pulse">Загрузка...</div>;
@@ -434,8 +445,35 @@ export function DailyPulse() {
               <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
                 <p className="text-sm font-medium text-gray-500 mb-5">Твоё настроение</p>
                 <div className="flex items-center gap-5 mb-6">
-                  <span className="text-4xl font-bold text-gray-900 w-10 text-center">{myMood}</span>
-                  <input type="range" min="1" max="10" value={myMood} onChange={(e) => { setMyMood(Number(e.target.value)); saveMetrics(Number(e.target.value), myIntimacy, myConflict); }} className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-terra-500" />
+                  {/* Показываем прочерк, если null */}
+                  <span className="text-4xl font-bold text-gray-900 w-10 text-center">
+                    {myMood !== null ? myMood : '-'}
+                  </span>
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max="10" 
+                    value={myMood || 5} // Если null, ставим ползунок посередине
+                    onChange={(e) => { 
+                      const val = Number(e.target.value);
+                      setMyMood(val); 
+                      saveMetrics(val, myIntimacy, myConflict); 
+                    }} 
+                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-terra-500" 
+                  />
+                  {/* Кнопка очистки (крестик) */}
+                  {myMood !== null && (
+                    <button 
+                      onClick={() => {
+                        setMyMood(null);
+                        saveMetrics(null, myIntimacy, myConflict);
+                      }}
+                      className="p-2 text-gray-300 hover:text-red-500 transition-colors cursor-pointer"
+                      title="Сбросить настроение"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  )}
                 </div>
                 <div className="flex gap-4">
                   <div className="relative group">
