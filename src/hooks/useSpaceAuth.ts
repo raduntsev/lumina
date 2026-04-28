@@ -44,10 +44,16 @@ export function useSpaceAuth() {
     let mounted = true;
 
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!mounted) return;
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (!mounted) return;
 
-      if (session?.user) {
+        // Если сессии нет или произошла ошибка с токеном, прекращаем загрузку
+        if (error || !session?.user) {
+          setState(s => ({ ...s, isLoading: false }));
+          return;
+        }
+
         const profile = await fetchProfile(session.user.id);
         if (mounted) {
           setState(s => ({
@@ -57,10 +63,13 @@ export function useSpaceAuth() {
             profile,
             spaceId:   profile?.space_id ?? null,
             isLoading: false,
+            error:     null,
           }));
         }
-      } else {
-        if (mounted) setState(s => ({ ...s, isLoading: false }));
+      } catch (err) {
+        if (mounted) {
+          setState(s => ({ ...s, isLoading: false, error: 'Ошибка загрузки профиля' }));
+        }
       }
     };
 
@@ -71,20 +80,23 @@ export function useSpaceAuth() {
       async (event, session) => {
         if (!mounted) return;
 
-        if (session?.user) {
-          const profile = await fetchProfile(session.user.id);
-          setState(s => ({
-            ...s,
-            user:      session.user,
-            session,
-            profile,
-            spaceId:   profile?.space_id ?? null,
-            isLoading: false,
-            error:     null,
-          }));
-
-        } else {
+        if (event === 'SIGNED_OUT' || !session) {
+          // Выход или смерть токена (например, из-за конфликта в localStorage)
           setState(s => ({ ...s, user: null, session: null, profile: null, spaceId: null, isLoading: false }));
+        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || session?.user) {
+          // Вход или обновление сессии
+          const profile = await fetchProfile(session.user.id);
+          if (mounted) {
+            setState(s => ({
+              ...s,
+              user:      session.user,
+              session,
+              profile,
+              spaceId:   profile?.space_id ?? null,
+              isLoading: false,
+              error:     null,
+            }));
+          }
         }
       }
     );
