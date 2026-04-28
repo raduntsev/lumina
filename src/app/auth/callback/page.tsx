@@ -10,46 +10,40 @@ export default function AuthCallback() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    const handleAuth = async () => {
-      // 1. Проверяем, есть ли защитный код (PKCE) в ссылке из письма
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
+    let mounted = true;
 
-      if (code) {
-        // Обмениваем код на ключи доступа
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) {
-          setErrorMsg(error.message);
-        } else {
-          router.push('/');
-        }
-        return;
-      }
-
-      // 2. Запасной вариант: проверяем, может сессия уже есть
+    // Клиент Supabase автоматически парсит URL (параметры ?code= или #access_token=)
+    // Нам нужно просто проверить, появилась ли сессия
+    const checkSession = async () => {
       const { data: { session }, error } = await supabase.auth.getSession();
       if (error) {
-        setErrorMsg(error.message);
-      } else if (session) {
+        if (mounted) setErrorMsg(error.message);
+        return;
+      }
+      if (session && mounted) {
         router.push('/');
-      } else {
-        // Если кода нет и сессии нет — не даем странице виснуть вечно
-        setTimeout(() => {
-          setErrorMsg("Ссылка недействительна или срок её действия истек. Попробуйте отправить её заново.");
-        }, 4000);
       }
     };
 
-    handleAuth();
+    checkSession();
 
-    // Страховочный слушатель
+    // Слушатель на случай, если парсинг URL займет время
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' || session) {
+      if ((event === 'SIGNED_IN' || session) && mounted) {
         router.push('/');
       }
     });
 
+    // Предохранитель от бесконечной загрузки
+    const timer = setTimeout(() => {
+      if (mounted) {
+        setErrorMsg("Не удалось войти. Убедитесь, что ключи Vercel настроены верно, и попробуйте запросить ссылку заново.");
+      }
+    }, 5000);
+
     return () => {
+      mounted = false;
+      clearTimeout(timer);
       subscription.unsubscribe();
     };
   }, [router]);
@@ -66,7 +60,7 @@ export default function AuthCallback() {
             <p className="text-sm text-gray-500">{errorMsg}</p>
             <button
               onClick={() => router.push('/')}
-              className="mt-4 w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-black transition-colors shadow-sm"
+              className="mt-4 w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-black transition-colors"
             >
               Вернуться на главную
             </button>
@@ -75,7 +69,7 @@ export default function AuthCallback() {
           <>
             <Loader2 className="w-8 h-8 text-terra-500 animate-spin mb-2" />
             <h2 className="text-lg font-semibold text-gray-900">Вход в систему...</h2>
-            <p className="text-sm text-gray-500">Синхронизируем ключи доступа</p>
+            <p className="text-sm text-gray-500">Автоматическая авторизация</p>
           </>
         )}
       </div>
