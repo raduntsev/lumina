@@ -12,12 +12,24 @@ export default function AuthCallback() {
   useEffect(() => {
     let mounted = true;
 
-    // Клиент Supabase автоматически парсит URL (параметры ?code= или #access_token=)
-    // Нам нужно просто проверить, появилась ли сессия
+    // 1. Сначала проверяем URL: не "съел" ли токен какой-нибудь бот мессенджера
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash;
+      if (hash && hash.includes('error=')) {
+        const hashParams = new URLSearchParams(hash.substring(1));
+        const errorDescription = hashParams.get('error_description');
+        if (errorDescription) {
+          setErrorMsg(decodeURIComponent(errorDescription).replace(/\+/g, ' '));
+          return; // Останавливаем выполнение, так как уже есть ошибка
+        }
+      }
+    }
+
+    // 2. Стандартная проверка сессии
     const checkSession = async () => {
       const { data: { session }, error } = await supabase.auth.getSession();
-      if (error) {
-        if (mounted) setErrorMsg(error.message);
+      if (error && mounted) {
+        setErrorMsg(error.message);
         return;
       }
       if (session && mounted) {
@@ -27,17 +39,15 @@ export default function AuthCallback() {
 
     checkSession();
 
-    // Слушатель на случай, если парсинг URL займет время
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if ((event === 'SIGNED_IN' || session) && mounted) {
         router.push('/');
       }
     });
 
-    // Предохранитель от бесконечной загрузки
     const timer = setTimeout(() => {
-      if (mounted) {
-        setErrorMsg("Не удалось войти. Убедитесь, что ключи Vercel настроены верно, и попробуйте запросить ссылку заново.");
+      if (mounted && !errorMsg) {
+        setErrorMsg("Время ожидания истекло. Пожалуйста, убедитесь, что вы перешли по ссылке из почты, а не из мессенджера.");
       }
     }, 5000);
 
@@ -46,7 +56,7 @@ export default function AuthCallback() {
       clearTimeout(timer);
       subscription.unsubscribe();
     };
-  }, [router]);
+  }, [router, errorMsg]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
@@ -57,19 +67,23 @@ export default function AuthCallback() {
               <AlertCircle className="w-6 h-6 text-red-500" />
             </div>
             <h2 className="text-lg font-semibold text-gray-900">Сбой авторизации</h2>
-            <p className="text-sm text-gray-500">{errorMsg}</p>
+            <p className="text-sm text-gray-500">
+              {errorMsg === 'Email link is invalid or has expired' 
+                ? 'Эта ссылка уже была использована (возможно, предпросмотром мессенджера). Запросите новую и откройте её напрямую из почты.' 
+                : errorMsg}
+            </p>
             <button
               onClick={() => router.push('/')}
               className="mt-4 w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-black transition-colors"
             >
-              Вернуться на главную
+              На главную
             </button>
           </>
         ) : (
           <>
             <Loader2 className="w-8 h-8 text-terra-500 animate-spin mb-2" />
             <h2 className="text-lg font-semibold text-gray-900">Вход в систему...</h2>
-            <p className="text-sm text-gray-500">Автоматическая авторизация</p>
+            <p className="text-sm text-gray-500">Синхронизируем ключи доступа</p>
           </>
         )}
       </div>
