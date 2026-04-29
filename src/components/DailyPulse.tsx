@@ -178,7 +178,12 @@ export function DailyPulse() {
     }
   }, [currentMonth, spaceId, currentUserId, isAuthLoading, inviteCode, days]);
 
-  useEffect(() => { fetchMonthActivity(); }, [fetchMonthActivity]);
+  useEffect(() => {
+  // Важно: ждем пока загрузится авторизация И появится spaceId
+  if (!isAuthLoading && spaceId) {
+    fetchMonthActivity();
+  }
+}, [fetchMonthActivity, isAuthLoading, spaceId]);
 
   useEffect(() => {
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
