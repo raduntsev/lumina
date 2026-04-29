@@ -53,11 +53,14 @@ export function useSpaceAuth() {
       }
 
       try {
-        const { data: profile } = await supabase
+        // Меняем single() на maybeSingle()
+        const { data: profile, error: fetchError } = await supabase
           .from('profiles')
           .select('id, space_id, display_name, avatar_url, total_balance')
           .eq('id', session.user.id)
-          .single();
+          .maybeSingle(); 
+
+        if (fetchError) throw fetchError;
 
         if (mounted) {
           setState(s => ({
