@@ -99,16 +99,17 @@ export default function Home() {
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 gap-8">
         
         {/* Создать пространство */}
-        <div className="w-full max-w-md bg-white p-8 border border-gray-200 rounded-2xl shadow-sm">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Создать пространство</h2>
-          <p className="text-sm font-medium text-gray-500 mb-6 leading-relaxed">Начните новую историю и пригласите партнера по уникальному коду.</p>
-          <button 
-            onClick={() => createSpace()}
-            className="w-full py-3 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-black transition-colors flex items-center justify-center gap-2 shadow-sm"
-          >
-            <Plus className="w-5 h-5" /> Создать новое
-          </button>
-        </div>
+<div className="w-full max-w-md bg-white p-8 border border-gray-200 rounded-2xl shadow-sm">
+  <h2 className="text-xl font-semibold text-gray-900 mb-2">Создать пространство</h2>
+  <p className="text-sm font-medium text-gray-500 mb-6 leading-relaxed">Начните новую историю и пригласите партнера по уникальному коду.</p>
+  <button 
+    type="button" /* <--- ДОБАВИЛИ ЭТО */
+    onClick={() => createSpace()}
+    className="w-full py-3 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-black transition-colors flex items-center justify-center gap-2 shadow-sm"
+  >
+    <Plus className="w-5 h-5" /> Создать новое
+  </button>
+</div>
 
         <div className="flex items-center gap-4 w-full max-w-md opacity-40">
           <div className="flex-grow h-px bg-gray-400" />
