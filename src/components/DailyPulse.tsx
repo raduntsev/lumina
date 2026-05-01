@@ -21,7 +21,7 @@ import {
 import supabase from '@/lib/supabase';
 import { useSpaceAuth } from '@/hooks/useSpaceAuth';
 
-// ── Interfaces ────────────────────────────────────────────────────────────────
+// ── Интерфейсы ──────────────────────────────────────────────────────────
 
 interface Task {
   id: string;
@@ -100,7 +100,7 @@ export function DailyPulse() {
     end: endOfMonth(currentMonth),
   }), [currentMonth]);
 
-  // ── Data Fetching ────────────────────────────────────────────────────────────
+  // ── Логика получения данных ──────────────────────────────────────────
 
   useEffect(() => {
     if (!spaceId || !currentUserId) return;
@@ -204,7 +204,7 @@ export function DailyPulse() {
     }
   }, [selectedDate, monthData, currentUserId]);
 
-  // ── Handlers ─────────────────────────────────────────────────────────────────
+  // ── Обработчики ───────────────────────────────────────────────────────
 
   const saveMetrics = async (val: number | null, intim: boolean, conf: boolean) => {
     if (!spaceId || !currentUserId) return;
@@ -287,7 +287,7 @@ export function DailyPulse() {
     setTasksByDate(prev => ({ ...prev, [selectedDateStr]: prev[selectedDateStr].filter(t => t.id !== taskId) }));
   };
 
-  // ── UI Helpers ───────────────────────────────────────────────────────────────
+  // ── Вспомогательные функции UI ────────────────────────────────────────
 
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
   const allCurrentTasks = tasksByDate[selectedDateStr] || [];
@@ -324,7 +324,7 @@ export function DailyPulse() {
 
   return (
     <div className="flex flex-col h-full bg-gray-50 overflow-hidden">
-      {/* ── Calendar Header ───────────────────────────────────────────────────── */}
+      {/* ── Чистая шапка календаря ────────────────────────────────────────── */}
       <div className="flex items-center justify-between border-b border-gray-100 p-4 bg-white shrink-0">
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-semibold text-gray-900 capitalize">
@@ -359,7 +359,7 @@ export function DailyPulse() {
       </div>
 
       <div className="flex flex-grow flex-col lg:flex-row min-h-0 overflow-hidden">
-        {/* ── Left Side: Grid ──────────────────────────────────────────────────── */}
+        {/* ── Сетка календаря ───────────────────────────────────────────── */}
         <div className="flex-grow flex flex-col bg-gray-50 border-r border-gray-100 overflow-hidden">
           <div className="grid grid-cols-7 border-b border-gray-100 bg-white/40 shrink-0">
             {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(day => (
@@ -374,7 +374,6 @@ export function DailyPulse() {
                 const dayInfo = monthData.find(d => d.date === dateStr);
                 const isSelected = isSameDay(day, selectedDate);
                 const hasTasks = (tasksByDate[dateStr] || []).length > 0;
-                
                 const myM = dayInfo?.metrics.find(m => m.user_id === currentUserId);
                 const partnerM = dayInfo?.metrics.find(m => m.user_id !== currentUserId);
 
@@ -412,7 +411,7 @@ export function DailyPulse() {
           </div>
         </div>
 
-        {/* ── Right Side: Details ─────────────────────────────────────────────── */}
+        {/* ── Правая панель с задачами ───────────────────────────────────── */}
         <aside className="w-full lg:w-[420px] flex flex-col bg-white overflow-y-auto border-l border-gray-100">
           <AnimatePresence mode="wait">
             <motion.div key={selectedDate.toString()} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="p-6 sm:p-8 space-y-8">
@@ -425,7 +424,7 @@ export function DailyPulse() {
                 <p className="text-sm text-gray-400 font-medium">Детали дня</p>
               </div>
 
-              {/* Mood & Metrics */}
+              {/* Настроение */}
               <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
                 <p className="text-sm font-medium text-gray-500 mb-5">Твоё настроение</p>
                 <div className="flex items-center gap-5 mb-6">
@@ -441,7 +440,7 @@ export function DailyPulse() {
                 </div>
               </div>
 
-              {/* Tasks Tab Control */}
+              {/* Список задач */}
               <div className="flex bg-gray-100 p-1 rounded-xl">
                 <button onClick={() => { setActiveTab('my'); setIsAddingTask(false); }} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${activeTab === 'my' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>Мои задачи</button>
                 <button onClick={() => { setActiveTab('partner'); setIsAddingTask(false); }} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${activeTab === 'partner' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>Задачи партнера</button>
@@ -454,7 +453,6 @@ export function DailyPulse() {
                 </div>
               )}
 
-              {/* Tasks List */}
               <div className="space-y-3">
                 {displayedTasks.map(task => {
                   const isMyTab = activeTab === 'my';
@@ -474,7 +472,7 @@ export function DailyPulse() {
                 })}
               </div>
 
-              {/* Add Task / Templates */}
+              {/* Управление */}
               {activeTab === 'partner' && (
                 <div className="pt-4 border-t border-gray-100 space-y-4">
                   {!isAddingTask && (
@@ -497,8 +495,8 @@ export function DailyPulse() {
                     </div>
                   )}
 
-                  {/* Templates List */}
-                  {!isAddingTask && templateSets.length > 0 && (
+                  {/* Секция наборов */}
+                  {!isAddingTask && !isCreatingSet && templateSets.length > 0 && (
                     <div className="space-y-3">
                       <p className="text-sm font-medium text-gray-500">Ваши наборы</p>
                       {templateSets.map(set => (
@@ -512,7 +510,6 @@ export function DailyPulse() {
                   )}
                 </div>
               )}
-
             </motion.div>
           </AnimatePresence>
         </aside>

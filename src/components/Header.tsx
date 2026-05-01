@@ -39,13 +39,15 @@ export function Header() {
       setPendingOrdersCount(count || 0);
     };
 
-    // Точный подсчет баллов за выполненные задачи
+    // Точный подсчет баллов: берем только те задачи, которые назначены НАМ 
+    // (то есть созданы партнером -> neq user.id) и которые выполнены.
+    // Логика точь-в-точь как в myTasks из DailyPulse.
     const fetchBalance = async () => {
       const { data } = await supabase
         .from('checklist_items')
         .select('points')
         .eq('space_id', spaceId)
-        .eq('user_id', user.id)
+        .neq('user_id', user.id) // ИСПРАВЛЕНО: считаем баллы за чужие задачи (предназначенные нам)
         .eq('is_completed', true);
       
       const total = data?.reduce((sum, item) => sum + (item.points || 0), 0) || 0;
@@ -109,7 +111,7 @@ export function Header() {
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg cursor-default">
               <span className="text-sm font-medium text-gray-700">{profile.display_name || 'Партнер'}</span>
               <span className="text-gray-300 text-xs">•</span>
-              <span className="text-sm font-bold text-terra-600">{dynamicBalance}</span>
+              <span className="text-sm font-bold text-terra-600">+{dynamicBalance}</span>
             </div>
           )}
           <button onClick={signOut} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer group">
