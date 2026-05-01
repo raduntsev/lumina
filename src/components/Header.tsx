@@ -3,12 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { StoreModal } from './StoreModal';
 import { LettersModal } from './LettersModal';
-import { Store, Mail, LogOut } from 'lucide-react';
 import supabase from '@/lib/supabase';
 import { useSpaceAuth } from '@/hooks/useSpaceAuth';
+import { SettingsModal } from './SettingsModal';
+import { Store, Mail, LogOut, Settings } from 'lucide-react';
 
 export function Header() {
   const [isStoreOpen, setIsStoreOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLettersOpen, setIsLettersOpen] = useState(false);
   const { spaceId, user, profile, signOut } = useSpaceAuth();
   
@@ -105,15 +107,22 @@ export function Header() {
         <div className="w-px h-6 bg-gray-200 hidden md:block" />
 
         <div className="flex items-center gap-1 sm:gap-3">
+          {/* Блок с именем и балансом (оставил только один!) */}
           {profile && (
             <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg cursor-default">
-              {/* Имя и точка скрыты на мобилках (hidden sm:block), баллы видны всегда */}
               <span className="hidden sm:block text-sm font-medium text-gray-700">{profile.display_name || 'Партнер'}</span>
               <span className="hidden sm:block text-gray-300 text-xs">•</span>
               <span className="text-sm font-bold text-terra-600">{realBalance}</span>
             </div>
           )}
-          <button onClick={signOut} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer group" title="Выйти">
+          
+          {/* Кнопка настроек (выход из пространства) */}
+          <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-all cursor-pointer group" title="Настройки пространства">
+            <Settings className="w-5 h-5" />
+          </button>
+
+          {/* Полный выход из аккаунта (LogOut) */}
+          <button onClick={signOut} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer group" title="Выйти из аккаунта">
             <LogOut className="w-5 h-5" />
           </button>
         </div>
@@ -121,6 +130,9 @@ export function Header() {
 
       <StoreModal isOpen={isStoreOpen} onClose={() => setIsStoreOpen(false)} />
       <LettersModal isOpen={isLettersOpen} onClose={() => setIsLettersOpen(false)} />
+      
+      {/* Наша новая модалка */}
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </header>
   );
 }

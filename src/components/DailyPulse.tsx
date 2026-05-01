@@ -367,7 +367,7 @@ export function DailyPulse() {
           </div>
         </div>
 
-        {/* Переключатели режимов - ТЕПЕРЬ ВИДНЫ НА МОБИЛКАХ */}
+        {/* Переключатели режимов */}
         <div className="flex w-full sm:w-auto bg-gray-100 p-1 rounded-xl">
           <button onClick={() => setViewMode('my')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${viewMode === 'my' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Я</button>
           <button onClick={() => setViewMode('partner')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${viewMode === 'partner' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Партнер</button>
@@ -508,7 +508,6 @@ export function DailyPulse() {
                         <span className={`flex-1 text-base font-medium ${isChecked ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{task.content}</span>
                         <span className="text-sm font-semibold text-terra-600">+{task.points}</span>
                       </label>
-                      {/* ИСПРАВЛЕНИЕ: opacity-100 на телефонах, opacity-0 на десктопах до наведения (sm:opacity-0) */}
                       {!isMyTab && !task.is_completed && (
                         <button 
                           onClick={() => handleDeleteTask(task.id)} 
@@ -525,69 +524,91 @@ export function DailyPulse() {
               {/* Управление */}
               {activeTab === 'partner' && (
                 <div className="pt-4 border-t border-gray-100 space-y-4">
-                  {!isAddingTask && !isCreatingSet && (
-                    <div className="grid grid-cols-2 gap-3">
-                      <button onClick={() => setIsAddingTask(true)} className="py-3 px-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 flex justify-center items-center gap-2 cursor-pointer"><Plus className="w-4 h-4 text-terra-500" /> Задача</button>
-                      <button onClick={() => setIsCreatingSet(true)} className="py-3 px-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 flex justify-center items-center gap-2 cursor-pointer"><ListPlus className="w-4 h-4 text-gray-400" /> Набор</button>
+                  {/* Заглушка если нет партнера */}
+                  {!partnerId ? (
+                    <div className="bg-gray-50 border border-gray-200 border-dashed p-6 rounded-2xl flex flex-col items-center text-center">
+                      <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm mb-3">
+                        <Heart className="w-5 h-5 text-gray-300" />
+                      </div>
+                      <h4 className="text-sm font-semibold text-gray-900 mb-1">Партнер еще в пути</h4>
+                      <p className="text-xs text-gray-500 mb-4 max-w-[220px]">
+                        Вы сможете назначать задачи, как только второй человек присоединится к пространству.
+                      </p>
+                      {inviteCode && (
+                        <button 
+                          onClick={() => { navigator.clipboard.writeText(inviteCode); alert('Код скопирован'); }} 
+                          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 hover:border-terra-300 hover:text-terra-600 rounded-xl text-sm font-medium transition-all text-gray-600 shadow-sm cursor-pointer"
+                        >
+                          Код: {inviteCode} <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
-                  )}
-
-                  {isAddingTask && !isCreatingSet && (
-                    <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 space-y-4">
-                      <form onSubmit={handleAddTask} className="flex gap-2">
-                        <input type="text" value={newTaskText} onChange={e => setNewTaskText(e.target.value)} placeholder="Что нужно сделать?" className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-terra-500" autoFocus />
-                        <input type="number" min="1" value={newTaskPoints} onChange={e => setNewTaskPoints(Number(e.target.value))} className="w-16 bg-white border border-gray-200 rounded-xl text-center text-sm font-semibold text-terra-600 outline-none" />
-                      </form>
-                      <div className="flex justify-end gap-2">
-                        <button onClick={() => setIsAddingTask(false)} className="px-4 py-2 text-sm text-gray-500">Отмена</button>
-                        <button onClick={handleAddTask} className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg">Добавить</button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Секция создания набора */}
-                  {isCreatingSet && (
-                    <div className="bg-white p-5 rounded-2xl border-2 border-dashed border-gray-200 space-y-5">
-                      <div>
-                        <label className="text-xs font-medium text-gray-500 mb-1.5 block">Название набора</label>
-                        <input type="text" value={newSetTitle} onChange={e => setNewSetTitle(e.target.value)} placeholder="Например: Уборка перед гостями" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-terra-500 font-semibold" autoFocus />
-                      </div>
-                      <div className="space-y-3">
-                        <label className="text-xs font-medium text-gray-500 mb-1 block">Задачи в наборе</label>
-                        {newSetTasks.map((t, idx) => (
-                          <div key={idx} className="flex gap-2 items-center">
-                            <input value={t.content} onChange={e => { const updated = [...newSetTasks]; updated[idx].content = e.target.value; setNewSetTasks(updated); }} className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-terra-400 outline-none" placeholder={`Шаг ${idx + 1}`} />
-                            <div className="bg-white border border-gray-200 rounded-lg flex items-center px-2">
-                              <span className="text-gray-400 text-xs">+</span>
-                              <input type="number" min="1" value={t.points} onChange={e => { const updated = [...newSetTasks]; updated[idx].points = Number(e.target.value); setNewSetTasks(updated); }} className="w-10 py-2 text-sm font-semibold text-terra-600 text-center outline-none" />
-                            </div>
-                            {newSetTasks.length > 1 && (
-                              <button onClick={() => setNewSetTasks(newSetTasks.filter((_, i) => i !== idx))} className="p-2 text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
-                            )}
-                          </div>
-                        ))}
-                        <button onClick={() => setNewSetTasks([...newSetTasks, { content: '', points: 1 }])} className="text-sm text-terra-600 font-medium flex items-center gap-1.5 py-2 hover:opacity-80 transition-opacity"><Plus className="w-4 h-4" /> Добавить шаг</button>
-                      </div>
-                      <div className="flex gap-3 pt-2 border-t border-gray-100">
-                        <button onClick={() => setIsCreatingSet(false)} className="flex-1 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-100 rounded-xl">Отмена</button>
-                        <button onClick={handleSaveSet} className="flex-1 py-2.5 text-sm font-medium bg-gray-900 text-white hover:bg-black rounded-xl">Сохранить набор</button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Секция сохраненных шаблонов */}
-                  {!isAddingTask && !isCreatingSet && templateSets.length > 0 && (
-                    <div className="space-y-3">
-                      <p className="text-sm font-medium text-gray-500">Ваши наборы</p>
-                      {templateSets.map(set => (
-                        <div key={set.id} className="border border-gray-200 rounded-2xl p-4 bg-white shadow-sm flex flex-col group relative">
-                          <h4 className="font-semibold text-gray-900 mb-2">{set.title}</h4>
-                          <button onClick={() => handleUseTemplateSet(set)} className="w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-sm"><CheckCircle2 className="w-4 h-4" /> Добавить (+{set.totalPoints})</button>
-                          {/* Удаление наборов тоже всегда видимо на мобилках */}
-                          <button onClick={() => handleDeleteTemplate(set.id, true)} className="absolute -top-2 -right-2 bg-white border border-gray-200 p-1.5 rounded-full text-gray-400 opacity-100 sm:opacity-0 group-hover:opacity-100 hover:text-red-500 cursor-pointer shadow-sm transition-opacity"><X className="w-4 h-4"/></button>
+                  ) : (
+                    <>
+                      {!isAddingTask && !isCreatingSet && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <button onClick={() => setIsAddingTask(true)} className="py-3 px-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 flex justify-center items-center gap-2 cursor-pointer hover:bg-gray-100 transition-colors"><Plus className="w-4 h-4 text-terra-500" /> Задача</button>
+                          <button onClick={() => setIsCreatingSet(true)} className="py-3 px-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 flex justify-center items-center gap-2 cursor-pointer hover:bg-gray-100 transition-colors"><ListPlus className="w-4 h-4 text-gray-400" /> Набор</button>
                         </div>
-                      ))}
-                    </div>
+                      )}
+
+                      {isAddingTask && !isCreatingSet && (
+                        <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 space-y-4">
+                          <form onSubmit={handleAddTask} className="flex gap-2">
+                            <input type="text" value={newTaskText} onChange={e => setNewTaskText(e.target.value)} placeholder="Что нужно сделать?" className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-terra-500" autoFocus />
+                            <input type="number" min="1" value={newTaskPoints} onChange={e => setNewTaskPoints(Number(e.target.value))} className="w-16 bg-white border border-gray-200 rounded-xl text-center text-sm font-semibold text-terra-600 outline-none" />
+                          </form>
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => setIsAddingTask(false)} className="px-4 py-2 text-sm text-gray-500 cursor-pointer hover:bg-gray-200 rounded-lg transition-colors">Отмена</button>
+                            <button onClick={handleAddTask} className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg cursor-pointer hover:bg-black transition-colors">Добавить</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Секция создания набора */}
+                      {isCreatingSet && (
+                        <div className="bg-white p-5 rounded-2xl border-2 border-dashed border-gray-200 space-y-5">
+                          <div>
+                            <label className="text-xs font-medium text-gray-500 mb-1.5 block">Название набора</label>
+                            <input type="text" value={newSetTitle} onChange={e => setNewSetTitle(e.target.value)} placeholder="Например: Уборка перед гостями" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-terra-500 font-semibold" autoFocus />
+                          </div>
+                          <div className="space-y-3">
+                            <label className="text-xs font-medium text-gray-500 mb-1 block">Задачи в наборе</label>
+                            {newSetTasks.map((t, idx) => (
+                              <div key={idx} className="flex gap-2 items-center">
+                                <input value={t.content} onChange={e => { const updated = [...newSetTasks]; updated[idx].content = e.target.value; setNewSetTasks(updated); }} className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-terra-400 outline-none" placeholder={`Шаг ${idx + 1}`} />
+                                <div className="bg-white border border-gray-200 rounded-lg flex items-center px-2">
+                                  <span className="text-gray-400 text-xs">+</span>
+                                  <input type="number" min="1" value={t.points} onChange={e => { const updated = [...newSetTasks]; updated[idx].points = Number(e.target.value); setNewSetTasks(updated); }} className="w-10 py-2 text-sm font-semibold text-terra-600 text-center outline-none" />
+                                </div>
+                                {newSetTasks.length > 1 && (
+                                  <button onClick={() => setNewSetTasks(newSetTasks.filter((_, i) => i !== idx))} className="p-2 text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-lg cursor-pointer transition-colors"><Trash2 className="w-4 h-4" /></button>
+                                )}
+                              </div>
+                            ))}
+                            <button onClick={() => setNewSetTasks([...newSetTasks, { content: '', points: 1 }])} className="text-sm text-terra-600 font-medium flex items-center gap-1.5 py-2 hover:opacity-80 transition-opacity cursor-pointer"><Plus className="w-4 h-4" /> Добавить шаг</button>
+                          </div>
+                          <div className="flex gap-3 pt-2 border-t border-gray-100">
+                            <button onClick={() => setIsCreatingSet(false)} className="flex-1 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer">Отмена</button>
+                            <button onClick={handleSaveSet} className="flex-1 py-2.5 text-sm font-medium bg-gray-900 text-white hover:bg-black rounded-xl transition-colors cursor-pointer">Сохранить набор</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Секция сохраненных шаблонов */}
+                      {!isAddingTask && !isCreatingSet && templateSets.length > 0 && (
+                        <div className="space-y-3">
+                          <p className="text-sm font-medium text-gray-500">Ваши наборы</p>
+                          {templateSets.map(set => (
+                            <div key={set.id} className="border border-gray-200 rounded-2xl p-4 bg-white shadow-sm flex flex-col group relative">
+                              <h4 className="font-semibold text-gray-900 mb-2">{set.title}</h4>
+                              <button onClick={() => handleUseTemplateSet(set)} className="w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-sm hover:bg-black transition-colors"><CheckCircle2 className="w-4 h-4" /> Добавить (+{set.totalPoints})</button>
+                              <button onClick={() => handleDeleteTemplate(set.id, true)} className="absolute -top-2 -right-2 bg-white border border-gray-200 p-1.5 rounded-full text-gray-400 opacity-100 sm:opacity-0 group-hover:opacity-100 hover:text-red-500 cursor-pointer shadow-sm transition-opacity"><X className="w-4 h-4"/></button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}
