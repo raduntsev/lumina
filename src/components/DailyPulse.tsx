@@ -252,6 +252,29 @@ export function DailyPulse() {
     setNewTaskText(''); setNewTaskPoints(1); setIsAddingTask(false);
   };
 
+  const handleSaveSet = async () => {
+    if (!spaceId || !currentUserId || !newSetTitle.trim()) return;
+    const validTasks = newSetTasks.filter(t => t.content.trim() !== '');
+    if (validTasks.length === 0) return;
+
+    const totalPoints = validTasks.reduce((sum, t) => sum + t.points, 0);
+    const contentStr = JSON.stringify({ isSet: true, title: newSetTitle.trim(), tasks: validTasks });
+
+    const { data, error } = await supabase.from('task_templates').insert({
+      space_id: spaceId,
+      user_id: currentUserId,
+      content: contentStr,
+      points: totalPoints
+    }).select('id, content, points').single();
+
+    if (data && !error) {
+      setTemplateSets(prev => [...prev, { id: data.id, title: newSetTitle.trim(), tasks: validTasks, totalPoints }]);
+      setIsCreatingSet(false);
+      setNewSetTitle('');
+      setNewSetTasks([{ content: '', points: 1 }]);
+    }
+  };
+
   const handleUseTemplateSet = async (set: TemplateSet) => {
     if (!spaceId || !currentUserId || !partnerId) return;
     let { data: checklist } = await supabase.from('checklists').select('id').eq('space_id', spaceId).eq('date', selectedDateStr).maybeSingle();
@@ -324,30 +347,38 @@ export function DailyPulse() {
 
   return (
     <div className="flex flex-col h-full bg-gray-50 overflow-hidden">
-      {/* ── Чистая шапка календаря ────────────────────────────────────────── */}
-      <div className="flex items-center justify-between border-b border-gray-100 p-4 bg-white shrink-0">
-        <div className="flex items-center gap-4">
-          <h2 className="text-xl font-semibold text-gray-900 capitalize">
-            {format(currentMonth, 'LLLL yyyy', { locale: ru })}
-          </h2>
-          <div className="flex bg-gray-50 border border-gray-200 rounded-xl overflow-hidden p-0.5">
-            <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-gray-500 hover:text-gray-900 transition-all cursor-pointer">
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-gray-500 hover:text-gray-900 transition-all cursor-pointer">
-              <ChevronRight className="w-5 h-5" />
-            </button>
+      {/* ── Адаптивная шапка календаря ────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row items-center justify-between border-b border-gray-100 p-4 bg-white shrink-0 gap-4 sm:gap-0">
+        
+        {/* Месяц и стрелки */}
+        <div className="flex items-center justify-between w-full sm:w-auto">
+          <div className="flex items-center gap-4">
+            <h2 className="text-xl font-semibold text-gray-900 capitalize">
+              {format(currentMonth, 'LLLL yyyy', { locale: ru })}
+            </h2>
+            <div className="flex bg-gray-50 border border-gray-200 rounded-xl overflow-hidden p-0.5">
+              <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-gray-500 hover:text-gray-900 transition-all cursor-pointer">
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-gray-500 hover:text-gray-900 transition-all cursor-pointer">
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="hidden sm:flex bg-gray-100 p-1 rounded-xl">
-          <button onClick={() => setViewMode('my')} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${viewMode === 'my' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Я</button>
-          <button onClick={() => setViewMode('partner')} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${viewMode === 'partner' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Партнер</button>
-          <button onClick={() => setViewMode('combined')} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${viewMode === 'combined' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Оба</button>
+        {/* Переключатели режимов - ТЕПЕРЬ ВИДНЫ НА МОБИЛКАХ */}
+        <div className="flex w-full sm:w-auto bg-gray-100 p-1 rounded-xl">
+          <button onClick={() => setViewMode('my')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${viewMode === 'my' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Я</button>
+          <button onClick={() => setViewMode('partner')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${viewMode === 'partner' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Партнер</button>
+          <button onClick={() => setViewMode('combined')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${viewMode === 'combined' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Оба</button>
         </div>
         
-        <div className="flex items-center gap-6">
-          {isDataLoading && <span className="text-xs font-medium text-gray-400 animate-pulse">Синхронизация...</span>}
+        {/* Инвайт код */}
+        <div className="flex items-center justify-between w-full sm:w-auto gap-4">
+          {isDataLoading ? (
+            <span className="text-xs font-medium text-gray-400 animate-pulse">Синхронизация...</span>
+          ) : <div />}
           {inviteCode && (
             <div onClick={() => { navigator.clipboard.writeText(inviteCode); alert('Код скопирован'); }} className="flex items-center gap-2 text-xs font-medium text-gray-500 hover:text-gray-900 transition-all cursor-pointer bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 hover:border-gray-300">
               <span className="hidden sm:inline">Код:</span> 
@@ -363,12 +394,12 @@ export function DailyPulse() {
         <div className="flex-grow flex flex-col bg-gray-50 border-r border-gray-100 overflow-hidden">
           <div className="grid grid-cols-7 border-b border-gray-100 bg-white/40 shrink-0">
             {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(day => (
-              <div key={day} className="py-3 text-xs font-semibold text-gray-400 text-center">{day}</div>
+              <div key={day} className="py-2 sm:py-3 text-[10px] sm:text-xs font-semibold text-gray-400 text-center">{day}</div>
             ))}
           </div>
 
           <div className="flex-grow overflow-y-auto bg-white">
-            <div className="grid grid-cols-7 auto-rows-[minmax(110px,1fr)]">
+            <div className="grid grid-cols-7 auto-rows-[minmax(70px,1fr)] sm:auto-rows-[minmax(110px,1fr)]">
               {days.map((day, idx) => {
                 const dateStr = format(day, 'yyyy-MM-dd');
                 const dayInfo = monthData.find(d => d.date === dateStr);
@@ -377,32 +408,45 @@ export function DailyPulse() {
                 const myM = dayInfo?.metrics.find(m => m.user_id === currentUserId);
                 const partnerM = dayInfo?.metrics.find(m => m.user_id !== currentUserId);
 
+                const showMyConflict = (viewMode === 'my' || viewMode === 'combined') && myM?.has_conflict;
+                const showPartnerConflict = (viewMode === 'partner' || viewMode === 'combined') && partnerM?.has_conflict;
+
                 return (
                   <button
                     key={dateStr}
                     onClick={() => { setSelectedDate(day); setIsAddingTask(false); setIsCreatingSet(false); }}
-                    className={`relative p-4 flex flex-col items-start justify-between border-b border-r border-gray-100 transition-all duration-200 group cursor-pointer ${isSelected ? 'shadow-inner ring-2 ring-inset ring-terra-500 z-10' : 'hover:opacity-90'}`}
+                    className={`relative p-1.5 sm:p-4 flex flex-col items-start justify-between border-b border-r border-gray-100 transition-all duration-200 group cursor-pointer ${isSelected ? 'shadow-inner ring-2 ring-inset ring-terra-500 z-10' : 'hover:opacity-90'}`}
                     style={{ ...getDayStyle(dateStr), gridColumnStart: idx === 0 ? (day.getDay() === 0 ? 7 : day.getDay()) : 'auto' }}
                   >
                     <div className="flex justify-between w-full z-10">
-                      <span className={`text-lg font-medium ${isToday(day) ? 'text-terra-600 font-bold underline' : 'text-gray-400 group-hover:text-gray-600'}`}>
+                      <span className={`text-sm sm:text-lg font-medium ${isToday(day) ? 'text-terra-600 font-bold underline' : 'text-gray-400 group-hover:text-gray-600'}`}>
                         {format(day, 'd')}
                       </span>
                     </div>
 
+                    {(showMyConflict || showPartnerConflict) && (
+                      <div className="absolute inset-0 opacity-[0.05] pointer-events-none z-20" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #000 0, #000 1px, transparent 0, transparent 50%)', backgroundSize: '7px 7px' }} />
+                    )}
+
                     <div className="flex w-full justify-between items-end z-30 mt-auto">
-                      <div className="flex gap-1 items-center w-1/3">
-                        {myM?.has_intimacy && <Heart className="w-2.5 h-2.5 text-terra-600 fill-terra-600" />}
-                        {myM?.has_conflict && <Zap className="w-2.5 h-2.5 text-gray-900" />}
+                      {(viewMode === 'my' || viewMode === 'combined') ? (
+                        <div className="flex flex-wrap gap-0.5 sm:gap-1 items-center w-1/3">
+                          {myM?.has_intimacy && <Heart className="w-3 h-3 sm:w-4 sm:h-4 text-terra-600 fill-terra-600" />}
+                          {myM?.has_conflict && <Zap className="w-3 h-3 sm:w-4 sm:h-4 text-gray-900" />}
+                        </div>
+                      ) : <div className="w-1/3" />}
+
+                      <div className="flex flex-col items-center gap-0.5 sm:gap-1 opacity-40 w-1/3">
+                        {dayInfo?.hasSurprise && <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-terra-500 fill-terra-500" />}
+                        {hasTasks && <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-gray-900 rounded-full" />}
                       </div>
-                      <div className="flex flex-col items-center gap-1 opacity-40 w-1/3">
-                        {dayInfo?.hasSurprise && <Sparkles className="w-2.5 h-2.5 text-terra-500 fill-terra-500" />}
-                        {hasTasks && <div className="w-1.5 h-1.5 bg-gray-900 rounded-full" />}
-                      </div>
-                      <div className="flex gap-1 items-center justify-end w-1/3">
-                        {partnerM?.has_conflict && <Zap className="w-2.5 h-2.5 text-white drop-shadow-sm" />}
-                        {partnerM?.has_intimacy && <Heart className="w-2.5 h-2.5 text-gray-900 fill-gray-900 opacity-60" />}
-                      </div>
+
+                      {(viewMode === 'partner' || viewMode === 'combined') ? (
+                        <div className="flex flex-wrap gap-0.5 sm:gap-1 items-center justify-end w-1/3">
+                          {partnerM?.has_conflict && <Zap className="w-3 h-3 sm:w-4 sm:h-4 text-white drop-shadow-sm" />}
+                          {partnerM?.has_intimacy && <Heart className="w-3 h-3 sm:w-4 sm:h-4 text-gray-900 fill-gray-900 opacity-60" />}
+                        </div>
+                      ) : <div className="w-1/3" />}
                     </div>
                   </button>
                 );
@@ -458,14 +502,20 @@ export function DailyPulse() {
                   const isMyTab = activeTab === 'my';
                   const isChecked = task.is_completed || (isMyTab && task.is_ready);
                   return (
-                    <div key={task.id} className="group flex items-start gap-3 relative">
+                    <div key={task.id} className="group flex items-start gap-3 relative pr-8">
                       <label className={`flex-1 flex items-start gap-3 p-4 rounded-xl border transition-colors ${task.is_completed ? 'bg-gray-50 border-transparent' : 'bg-white border-gray-200'} cursor-pointer`}>
                         <input type="checkbox" className="mt-1 w-5 h-5 rounded border-gray-300 text-terra-500 cursor-pointer" checked={isChecked} disabled={task.is_completed} onChange={() => { if (isMyTab) handleToggleReady(task.id, task.is_ready); else handleToggleCompleted(task.id, task.is_completed); }} />
                         <span className={`flex-1 text-base font-medium ${isChecked ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{task.content}</span>
                         <span className="text-sm font-semibold text-terra-600">+{task.points}</span>
                       </label>
+                      {/* ИСПРАВЛЕНИЕ: opacity-100 на телефонах, opacity-0 на десктопах до наведения (sm:opacity-0) */}
                       {!isMyTab && !task.is_completed && (
-                        <button onClick={() => handleDeleteTask(task.id)} className="absolute -right-2 -top-2 bg-white border border-gray-200 rounded-full p-1.5 opacity-0 group-hover:opacity-100 hover:text-red-500 cursor-pointer shadow-sm"><X className="w-3 h-3" /></button>
+                        <button 
+                          onClick={() => handleDeleteTask(task.id)} 
+                          className="absolute right-0 -top-1 bg-white border border-gray-200 rounded-full p-2 opacity-100 sm:opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 cursor-pointer shadow-sm transition-opacity"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
                       )}
                     </div>
                   );
@@ -475,14 +525,14 @@ export function DailyPulse() {
               {/* Управление */}
               {activeTab === 'partner' && (
                 <div className="pt-4 border-t border-gray-100 space-y-4">
-                  {!isAddingTask && (
+                  {!isAddingTask && !isCreatingSet && (
                     <div className="grid grid-cols-2 gap-3">
                       <button onClick={() => setIsAddingTask(true)} className="py-3 px-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 flex justify-center items-center gap-2 cursor-pointer"><Plus className="w-4 h-4 text-terra-500" /> Задача</button>
                       <button onClick={() => setIsCreatingSet(true)} className="py-3 px-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 flex justify-center items-center gap-2 cursor-pointer"><ListPlus className="w-4 h-4 text-gray-400" /> Набор</button>
                     </div>
                   )}
 
-                  {isAddingTask && (
+                  {isAddingTask && !isCreatingSet && (
                     <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 space-y-4">
                       <form onSubmit={handleAddTask} className="flex gap-2">
                         <input type="text" value={newTaskText} onChange={e => setNewTaskText(e.target.value)} placeholder="Что нужно сделать?" className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-terra-500" autoFocus />
@@ -495,7 +545,37 @@ export function DailyPulse() {
                     </div>
                   )}
 
-                  {/* Секция наборов */}
+                  {/* Секция создания набора */}
+                  {isCreatingSet && (
+                    <div className="bg-white p-5 rounded-2xl border-2 border-dashed border-gray-200 space-y-5">
+                      <div>
+                        <label className="text-xs font-medium text-gray-500 mb-1.5 block">Название набора</label>
+                        <input type="text" value={newSetTitle} onChange={e => setNewSetTitle(e.target.value)} placeholder="Например: Уборка перед гостями" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-terra-500 font-semibold" autoFocus />
+                      </div>
+                      <div className="space-y-3">
+                        <label className="text-xs font-medium text-gray-500 mb-1 block">Задачи в наборе</label>
+                        {newSetTasks.map((t, idx) => (
+                          <div key={idx} className="flex gap-2 items-center">
+                            <input value={t.content} onChange={e => { const updated = [...newSetTasks]; updated[idx].content = e.target.value; setNewSetTasks(updated); }} className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-terra-400 outline-none" placeholder={`Шаг ${idx + 1}`} />
+                            <div className="bg-white border border-gray-200 rounded-lg flex items-center px-2">
+                              <span className="text-gray-400 text-xs">+</span>
+                              <input type="number" min="1" value={t.points} onChange={e => { const updated = [...newSetTasks]; updated[idx].points = Number(e.target.value); setNewSetTasks(updated); }} className="w-10 py-2 text-sm font-semibold text-terra-600 text-center outline-none" />
+                            </div>
+                            {newSetTasks.length > 1 && (
+                              <button onClick={() => setNewSetTasks(newSetTasks.filter((_, i) => i !== idx))} className="p-2 text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                            )}
+                          </div>
+                        ))}
+                        <button onClick={() => setNewSetTasks([...newSetTasks, { content: '', points: 1 }])} className="text-sm text-terra-600 font-medium flex items-center gap-1.5 py-2 hover:opacity-80 transition-opacity"><Plus className="w-4 h-4" /> Добавить шаг</button>
+                      </div>
+                      <div className="flex gap-3 pt-2 border-t border-gray-100">
+                        <button onClick={() => setIsCreatingSet(false)} className="flex-1 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-100 rounded-xl">Отмена</button>
+                        <button onClick={handleSaveSet} className="flex-1 py-2.5 text-sm font-medium bg-gray-900 text-white hover:bg-black rounded-xl">Сохранить набор</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Секция сохраненных шаблонов */}
                   {!isAddingTask && !isCreatingSet && templateSets.length > 0 && (
                     <div className="space-y-3">
                       <p className="text-sm font-medium text-gray-500">Ваши наборы</p>
@@ -503,7 +583,8 @@ export function DailyPulse() {
                         <div key={set.id} className="border border-gray-200 rounded-2xl p-4 bg-white shadow-sm flex flex-col group relative">
                           <h4 className="font-semibold text-gray-900 mb-2">{set.title}</h4>
                           <button onClick={() => handleUseTemplateSet(set)} className="w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-sm"><CheckCircle2 className="w-4 h-4" /> Добавить (+{set.totalPoints})</button>
-                          <button onClick={() => handleDeleteTemplate(set.id, true)} className="absolute -top-2 -right-2 bg-white border border-gray-200 p-1.5 rounded-full text-gray-400 opacity-0 group-hover:opacity-100 hover:text-red-500 cursor-pointer shadow-sm"><X className="w-4 h-4"/></button>
+                          {/* Удаление наборов тоже всегда видимо на мобилках */}
+                          <button onClick={() => handleDeleteTemplate(set.id, true)} className="absolute -top-2 -right-2 bg-white border border-gray-200 p-1.5 rounded-full text-gray-400 opacity-100 sm:opacity-0 group-hover:opacity-100 hover:text-red-500 cursor-pointer shadow-sm transition-opacity"><X className="w-4 h-4"/></button>
                         </div>
                       ))}
                     </div>
