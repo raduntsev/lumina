@@ -14,7 +14,7 @@ export function Header() {
   
   const [unreadLettersCount, setUnreadLettersCount] = useState(0);
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
-  const [dynamicBalance, setDynamicBalance] = useState(0);
+  const [realBalance, setRealBalance] = useState<number>(0);
 
   useEffect(() => {
     if (!spaceId || !user?.id) return;
@@ -39,19 +39,15 @@ export function Header() {
       setPendingOrdersCount(count || 0);
     };
 
-    // Точный подсчет баллов: берем только те задачи, которые назначены НАМ 
-    // (то есть созданы партнером -> neq user.id) и которые выполнены.
-    // Логика точь-в-точь как в myTasks из DailyPulse.
+    // Тот самый правильный расчет через RPC, как было в твоем page.tsx
     const fetchBalance = async () => {
-      const { data } = await supabase
-        .from('checklist_items')
-        .select('points')
-        .eq('space_id', spaceId)
-        .neq('user_id', user.id) // ИСПРАВЛЕНО: считаем баллы за чужие задачи (предназначенные нам)
-        .eq('is_completed', true);
-      
-      const total = data?.reduce((sum, item) => sum + (item.points || 0), 0) || 0;
-      setDynamicBalance(total);
+      const { data, error } = await supabase.rpc('get_real_balance', { 
+        usr_id: user.id, 
+        spc_id: spaceId 
+      });
+      if (!error && data !== null) {
+        setRealBalance(data);
+      }
     };
 
     fetchUnreadLetters();
@@ -60,8 +56,11 @@ export function Header() {
 
     const channel = supabase.channel('header_sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'letters', filter: `space_id=eq.${spaceId}` }, fetchUnreadLetters)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_purchases', filter: `space_id=eq.${spaceId}` }, fetchPendingOrders)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'checklist_items', filter: `space_id=eq.${spaceId}` }, fetchBalance)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_purchases', filter: `space_id=eq.${spaceId}` }, () => {
+        fetchPendingOrders();
+        fetchBalance(); // Обновляем баланс при покупках
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'checklist_items', filter: `space_id=eq.${spaceId}` }, fetchBalance) // Обновляем при выполнении задач
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -111,10 +110,10 @@ export function Header() {
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg cursor-default">
               <span className="text-sm font-medium text-gray-700">{profile.display_name || 'Партнер'}</span>
               <span className="text-gray-300 text-xs">•</span>
-              <span className="text-sm font-bold text-terra-600">+{dynamicBalance}</span>
+              <span className="text-sm font-bold text-terra-600">{realBalance}</span>
             </div>
           )}
-          <button onClick={signOut} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer group">
+          <button onClick={signOut} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer group" title="Выйти">
             <LogOut className="w-5 h-5" />
           </button>
         </div>
