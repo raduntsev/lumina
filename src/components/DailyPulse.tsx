@@ -95,6 +95,9 @@ export function DailyPulse() {
   const [myIntimacy, setMyIntimacy] = useState(false);
   const [myConflict, setMyConflict] = useState(false);
 
+  // Состояние для блокировки спам-кликов по задачам
+  const [processingTasks, setProcessingTasks] = useState<Set<string>>(new Set());
+
   const days = useMemo(() => eachDayOfInterval({
     start: startOfMonth(currentMonth),
     end: endOfMonth(currentMonth),
@@ -204,7 +207,7 @@ export function DailyPulse() {
     }
   }, [selectedDate, monthData, currentUserId]);
 
-  // ── Обработчики ───────────────────────────────────────────────────────
+  // ── Обработчики (Защищенные от спама и рассинхрона) ──────────────────
 
   const saveMetrics = async (val: number | null, intim: boolean, conf: boolean) => {
     if (!spaceId || !currentUserId) return;
@@ -215,21 +218,67 @@ export function DailyPulse() {
   };
 
   const handleToggleReady = async (taskId: string, currentReady: boolean) => {
+    if (processingTasks.has(taskId)) return; // Блокировка от спам-кликов
+    setProcessingTasks(prev => new Set(prev).add(taskId));
+
+    // Оптимистичный UI
     setTasksByDate(prev => ({ ...prev, [selectedDateStr]: prev[selectedDateStr].map(t => t.id === taskId ? { ...t, is_ready: !currentReady } : t) }));
-    await supabase.from('checklist_items').update({ is_ready: !currentReady }).eq('id', taskId);
+    
+    const { data, error } = await supabase.from('checklist_items')
+      .update({ is_ready: !currentReady })
+      .eq('id', taskId)
+      .select('id');
+
+    if (error || !data || data.length === 0) {
+      alert('Не удалось обновить. Похоже, партнер изменил эту задачу.');
+      fetchMonthActivity();
+    }
+
+    setProcessingTasks(prev => {
+      const next = new Set(prev);
+      next.delete(taskId);
+      return next;
+    });
   };
 
   const handleToggleCompleted = async (taskId: string, currentCompleted: boolean) => {
+    if (processingTasks.has(taskId)) return;
+    setProcessingTasks(prev => new Set(prev).add(taskId));
+
     setTasksByDate(prev => ({ ...prev, [selectedDateStr]: prev[selectedDateStr].map(t => t.id === taskId ? { ...t, is_completed: !currentCompleted } : t) }));
-    await supabase.from('checklist_items').update({ is_completed: !currentCompleted }).eq('id', taskId);
+    
+    const { data, error } = await supabase.from('checklist_items')
+      .update({ is_completed: !currentCompleted })
+      .eq('id', taskId)
+      .select('id');
+
+    if (error || !data || data.length === 0) {
+      alert('Ошибка синхронизации: задача была изменена партнером.');
+      fetchMonthActivity(); 
+    }
+
+    setProcessingTasks(prev => {
+      const next = new Set(prev);
+      next.delete(taskId);
+      return next;
+    });
   };
 
   const handleReviewDay = async () => {
     const tasksToConfirm = partnerTasks.filter(t => t.is_ready && !t.is_completed);
     if (tasksToConfirm.length === 0) return;
+    
     setTasksByDate(prev => ({ ...prev, [selectedDateStr]: prev[selectedDateStr].map(t => (t.is_ready && !t.is_completed && t.author_id === currentUserId) ? { ...t, is_completed: true } : t) }));
+    
     const taskIds = tasksToConfirm.map(t => t.id);
-    await supabase.from('checklist_items').update({ is_completed: true }).in('id', taskIds);
+    const { data, error } = await supabase.from('checklist_items')
+      .update({ is_completed: true })
+      .in('id', taskIds)
+      .select('id');
+
+    if (error || !data || data.length !== taskIds.length) {
+       fetchMonthActivity();
+    }
   };
 
   const addTaskToDatabase = async (taskText: string, taskPoints: number) => {
@@ -306,8 +355,17 @@ export function DailyPulse() {
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    await supabase.from('checklist_items').delete().eq('id', taskId);
+    if (processingTasks.has(taskId)) return;
+    setProcessingTasks(prev => new Set(prev).add(taskId));
+
     setTasksByDate(prev => ({ ...prev, [selectedDateStr]: prev[selectedDateStr].filter(t => t.id !== taskId) }));
+    await supabase.from('checklist_items').delete().eq('id', taskId);
+
+    setProcessingTasks(prev => {
+      const next = new Set(prev);
+      next.delete(taskId);
+      return next;
+    });
   };
 
   // ── Вспомогательные функции UI ────────────────────────────────────────
@@ -468,12 +526,21 @@ export function DailyPulse() {
                 <p className="text-sm text-gray-400 font-medium">Детали дня</p>
               </div>
 
-              {/* Настроение */}
+              {/* Настроение - ТЕПЕРЬ ЗАЩИЩЕНО ОТ СПАМА ЗАПРОСАМИ */}
               <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
                 <p className="text-sm font-medium text-gray-500 mb-5">Твоё настроение</p>
                 <div className="flex items-center gap-5 mb-6">
                   <span className="text-4xl font-bold text-gray-900 w-10 text-center">{myMood !== null ? myMood : '-'}</span>
-                  <input type="range" min="1" max="10" value={myMood || 5} onChange={(e) => { const val = Number(e.target.value); setMyMood(val); saveMetrics(val, myIntimacy, myConflict); }} className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-terra-500" />
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max="10" 
+                    value={myMood || 5} 
+                    onChange={(e) => setMyMood(Number(e.target.value))} 
+                    onMouseUp={(e) => saveMetrics(Number((e.target as HTMLInputElement).value), myIntimacy, myConflict)}
+                    onTouchEnd={(e) => saveMetrics(Number((e.target as HTMLInputElement).value), myIntimacy, myConflict)}
+                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-terra-500" 
+                  />
                   {myMood !== null && (
                     <button onClick={() => { setMyMood(null); saveMetrics(null, myIntimacy, myConflict); }} className="p-2 text-gray-300 hover:text-red-500 transition-colors cursor-pointer"><X className="w-5 h-5" /></button>
                   )}
@@ -501,16 +568,19 @@ export function DailyPulse() {
                 {displayedTasks.map(task => {
                   const isMyTab = activeTab === 'my';
                   const isChecked = task.is_completed || (isMyTab && task.is_ready);
+                  const isLocked = processingTasks.has(task.id);
+                  
                   return (
-                    <div key={task.id} className="group flex items-start gap-3 relative pr-8">
+                    <div key={task.id} className={`group flex items-start gap-3 relative pr-8 ${isLocked ? 'opacity-50 pointer-events-none' : ''}`}>
                       <label className={`flex-1 flex items-start gap-3 p-4 rounded-xl border transition-colors ${task.is_completed ? 'bg-gray-50 border-transparent' : 'bg-white border-gray-200'} cursor-pointer`}>
-                        <input type="checkbox" className="mt-1 w-5 h-5 rounded border-gray-300 text-terra-500 cursor-pointer" checked={isChecked} disabled={task.is_completed} onChange={() => { if (isMyTab) handleToggleReady(task.id, task.is_ready); else handleToggleCompleted(task.id, task.is_completed); }} />
+                        <input type="checkbox" className="mt-1 w-5 h-5 rounded border-gray-300 text-terra-500 cursor-pointer disabled:opacity-50" checked={isChecked} disabled={task.is_completed || isLocked} onChange={() => { if (isMyTab) handleToggleReady(task.id, task.is_ready); else handleToggleCompleted(task.id, task.is_completed); }} />
                         <span className={`flex-1 text-base font-medium ${isChecked ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{task.content}</span>
                         <span className="text-sm font-semibold text-terra-600">+{task.points}</span>
                       </label>
                       {!isMyTab && !task.is_completed && (
                         <button 
                           onClick={() => handleDeleteTask(task.id)} 
+                          disabled={isLocked}
                           className="absolute right-0 -top-1 bg-white border border-gray-200 rounded-full p-2 opacity-100 sm:opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 cursor-pointer shadow-sm transition-opacity"
                         >
                           <X className="w-3.5 h-3.5" />
