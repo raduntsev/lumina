@@ -11,11 +11,11 @@ export function Header() {
   const [isStoreOpen, setIsStoreOpen] = useState(false);
   const [isLettersOpen, setIsLettersOpen] = useState(false);
   
-  // Достаем profile и signOut из контекста
   const { spaceId, user, profile, signOut } = useSpaceAuth();
   
   const [unreadLettersCount, setUnreadLettersCount] = useState(0);
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
+  const [dynamicBalance, setDynamicBalance] = useState(0);
 
   useEffect(() => {
     if (!spaceId || !user?.id) return;
@@ -40,8 +40,22 @@ export function Header() {
       setPendingOrdersCount(count || 0);
     };
 
+    // Функция для получения реальной суммы баллов за выполненные задачи
+    const fetchBalance = async () => {
+      const { data } = await supabase
+        .from('checklist_items')
+        .select('points')
+        .eq('space_id', spaceId)
+        .eq('user_id', user.id) // Считаем баллы за задачи, выполненные ЭТИМ пользователем
+        .eq('is_completed', true);
+      
+      const total = data?.reduce((sum, item) => sum + (item.points || 0), 0) || 0;
+      setDynamicBalance(total);
+    };
+
     fetchUnreadLetters();
     fetchPendingOrders();
+    fetchBalance();
 
     const channel = supabase.channel('header_sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'letters', filter: `space_id=eq.${spaceId}` }, () => {
@@ -50,6 +64,10 @@ export function Header() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_purchases', filter: `space_id=eq.${spaceId}` }, () => {
         fetchPendingOrders();
       })
+      // Слушаем изменения в задачах, чтобы обновлять баланс в реальном времени
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'checklist_items', filter: `space_id=eq.${spaceId}` }, () => {
+        fetchBalance();
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -57,8 +75,6 @@ export function Header() {
 
   return (
     <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-100 sticky top-0 z-40">
-      
-      {/* Логотип */}
       <div className="flex items-center">
         <h1 className="text-xl font-semibold text-gray-900 tracking-tight cursor-default">
           Lumina<span className="text-terra-500 font-light">Pulse</span>
@@ -66,14 +82,8 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-4 sm:gap-6">
-        {/* Навигация */}
         <nav className="flex items-center gap-2 sm:gap-4">
-          
-          {/* Кнопка: Письма */}
-          <button 
-            onClick={() => setIsLettersOpen(true)} 
-            className="flex items-center gap-2.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-all cursor-pointer group"
-          >
+          <button onClick={() => setIsLettersOpen(true)} className="flex items-center gap-2.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-all cursor-pointer group">
             <div className="relative">
               <Mail className="w-5 h-5 text-gray-400 group-hover:text-terra-500 transition-colors" />
               {unreadLettersCount > 0 && (
@@ -86,11 +96,7 @@ export function Header() {
             <span className="hidden sm:inline-block text-sm font-medium">Письма</span>
           </button>
 
-          {/* Кнопка: Награды (Магазин) */}
-          <button 
-            onClick={() => setIsStoreOpen(true)} 
-            className="flex items-center gap-2.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-all cursor-pointer group"
-          >
+          <button onClick={() => setIsStoreOpen(true)} className="flex items-center gap-2.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-all cursor-pointer group">
             <div className="relative">
               <Store className="w-5 h-5 text-gray-400 group-hover:text-terra-500 transition-colors" />
               {pendingOrdersCount > 0 && (
@@ -102,22 +108,10 @@ export function Header() {
             </div>
             <span className="hidden sm:inline-block text-sm font-medium">Награды</span>
           </button>
-          
-          {/* Неактивные кнопки */}
-          <button className="hidden sm:flex items-center gap-2.5 px-3 py-2 text-gray-300 cursor-not-allowed">
-            <Archive className="w-5 h-5" />
-            <span className="text-sm font-medium">Архив</span>
-          </button>
-          <button className="hidden sm:flex items-center gap-2.5 px-3 py-2 text-gray-300 cursor-not-allowed">
-            <Settings className="w-5 h-5" />
-            <span className="text-sm font-medium">Настройки</span>
-          </button>
         </nav>
 
-        {/* Разделитель */}
         <div className="w-px h-6 bg-gray-200 hidden md:block" />
 
-        {/* Блок пользователя и выхода */}
         <div className="flex items-center gap-3">
           {profile && (
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg cursor-default">
@@ -126,23 +120,17 @@ export function Header() {
               </span>
               <span className="text-gray-300 text-xs">•</span>
               <span className="text-sm font-bold text-terra-600">
-                {profile.total_balance || 0}
+                {dynamicBalance}
               </span>
             </div>
           )}
           
-          <button 
-            onClick={signOut} 
-            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer group"
-            title="Выйти"
-          >
+          <button onClick={signOut} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer group">
             <LogOut className="w-5 h-5 group-hover:scale-105 transition-transform" />
           </button>
         </div>
-
       </div>
 
-      {/* Модальные окна */}
       <StoreModal isOpen={isStoreOpen} onClose={() => setIsStoreOpen(false)} />
       <LettersModal isOpen={isLettersOpen} onClose={() => setIsLettersOpen(false)} />
     </header>

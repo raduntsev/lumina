@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, CheckCircle2, Lock, HeartHandshake, Plus, X, Copy, Clock, BookmarkPlus, Heart, Zap, Sparkles, Trash2, ListPlus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Plus, X, Copy, BookmarkPlus, Heart, Zap, Sparkles, Trash2, ListPlus } from 'lucide-react';
 import supabase from '@/lib/supabase';
 import { useSpaceAuth } from '@/hooks/useSpaceAuth';
 
@@ -61,26 +61,21 @@ export function DailyPulse() {
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [partnerId, setPartnerId] = useState<string | null>(null);
 
-  // Шаблоны и наборы
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templateSets, setTemplateSets] = useState<TemplateSet[]>([]);
 
   const [activeTab, setActiveTab] = useState<'my' | 'partner'>('my');
   const [viewMode, setViewMode] = useState<'my' | 'partner' | 'combined'>('combined');
-
   const [tasksByDate, setTasksByDate] = useState<Record<string, Task[]>>({});
   
-  // UI States
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [newTaskText, setNewTaskText] = useState('');
   const [newTaskPoints, setNewTaskPoints] = useState<number>(1);
 
-  // UI States для Наборов
   const [isCreatingSet, setIsCreatingSet] = useState(false);
   const [newSetTitle, setNewSetTitle] = useState('');
   const [newSetTasks, setNewSetTasks] = useState<TemplateTask[]>([{ content: '', points: 1 }]);
 
-  // Метрики
   const [myMood, setMyMood] = useState<number | null>(null);
   const [myIntimacy, setMyIntimacy] = useState(false);
   const [myConflict, setMyConflict] = useState(false);
@@ -107,7 +102,6 @@ export function DailyPulse() {
       if (data) {
         const singles: Template[] = [];
         const sets: TemplateSet[] = [];
-        
         data.forEach(item => {
           try {
             const parsed = JSON.parse(item.content);
@@ -120,7 +114,6 @@ export function DailyPulse() {
             singles.push(item);
           }
         });
-        
         setTemplates(singles);
         setTemplateSets(sets);
       }
@@ -129,9 +122,7 @@ export function DailyPulse() {
   }, [spaceId, currentUserId]);
 
   const fetchMonthActivity = useCallback(async () => {
-    if (isAuthLoading) return;
-    if (!spaceId || !currentUserId) { setIsDataLoading(false); return; }
-
+    if (isAuthLoading || !spaceId || !currentUserId) { setIsDataLoading(false); return; }
     setIsDataLoading(true);
     try {
       if (!inviteCode) {
@@ -178,7 +169,6 @@ export function DailyPulse() {
     }
   }, [currentMonth, spaceId, currentUserId, isAuthLoading, inviteCode, days]);
 
-  // Запуск только после полной инициализации
   useEffect(() => {
     if (!isAuthLoading && spaceId) {
       fetchMonthActivity();
@@ -224,45 +214,33 @@ export function DailyPulse() {
     await supabase.from('checklist_items').update({ is_completed: !currentCompleted }).eq('id', taskId);
   };
 
-  // Оптимизированное массовое подтверждение
   const handleReviewDay = async () => {
     const tasksToConfirm = partnerTasks.filter(t => t.is_ready && !t.is_completed);
     if (tasksToConfirm.length === 0) return;
-
     setTasksByDate(prev => ({ ...prev, [selectedDateStr]: prev[selectedDateStr].map(t => (t.is_ready && !t.is_completed && t.author_id === currentUserId) ? { ...t, is_completed: true } : t) }));
-    
     const taskIds = tasksToConfirm.map(t => t.id);
     await supabase.from('checklist_items').update({ is_completed: true }).in('id', taskIds);
   };
 
   const addTaskToDatabase = async (taskText: string, taskPoints: number) => {
-    if (!spaceId || !currentUserId) return;
-    if (!partnerId) { alert("Партнер еще не присоединился к вашему пространству!"); return; }
-
+    if (!spaceId || !currentUserId || !partnerId) return;
     let { data: checklist } = await supabase.from('checklists').select('id').eq('space_id', spaceId).eq('date', selectedDateStr).maybeSingle();
     if (!checklist) {
       const { data: nC } = await supabase.from('checklists').insert({ space_id: spaceId, user_id: currentUserId, target_user_id: partnerId, date: selectedDateStr }).select('id').single();
       checklist = nC;
     }
-
     if (checklist) {
       await supabase.from('checklist_items').insert({ checklist_id: checklist.id, space_id: spaceId, user_id: currentUserId, content: taskText, points: taskPoints, sort_order: allCurrentTasks.length, is_ready: false, is_completed: false });
     }
   };
 
-  // Оптимизированная вставка набора задач
   const addMultipleTasksToDatabase = async (tasksToAdd: {content: string, points: number}[]) => {
-    if (!spaceId || !currentUserId || !partnerId) {
-      if (!partnerId) alert("Партнер еще не присоединился!");
-      return;
-    }
-
+    if (!spaceId || !currentUserId || !partnerId) return;
     let { data: checklist } = await supabase.from('checklists').select('id').eq('space_id', spaceId).eq('date', selectedDateStr).maybeSingle();
     if (!checklist) {
       const { data: nC } = await supabase.from('checklists').insert({ space_id: spaceId, user_id: currentUserId, target_user_id: partnerId, date: selectedDateStr }).select('id').single();
       checklist = nC;
     }
-
     if (checklist) {
       const itemsToInsert = tasksToAdd.map((task, index) => ({
         checklist_id: checklist.id,
@@ -295,16 +273,12 @@ export function DailyPulse() {
   };
 
   const handleSaveSet = async () => {
-    if (!newSetTitle.trim() || newSetTasks.some(t => !t.content.trim()) || !spaceId || !currentUserId) {
-      alert("Заполните название набора и все задачи."); return;
-    }
+    if (!newSetTitle.trim() || newSetTasks.some(t => !t.content.trim()) || !spaceId || !currentUserId) return;
     const total = newSetTasks.reduce((sum, t) => sum + (Number(t.points) || 0), 0);
     const payload = JSON.stringify({ isSet: true, title: newSetTitle.trim(), tasks: newSetTasks.filter(t => t.content.trim()) });
-    
     const { data } = await supabase.from('task_templates').insert({
       space_id: spaceId, user_id: currentUserId, content: payload, points: total
     }).select('id, content, points').single();
-
     if (data) {
       const parsed = JSON.parse(data.content);
       setTemplateSets(prev => [...prev, { id: data.id, title: parsed.title, tasks: parsed.tasks, totalPoints: data.points }]);
@@ -332,29 +306,21 @@ export function DailyPulse() {
   const getDayStyle = (dateStr: string) => {
     const data = monthData.find(d => d.date === dateStr);
     if (!data || data.metrics.length === 0) return { backgroundColor: 'transparent' };
-
     const myMetric = data.metrics.find(m => m.user_id === currentUserId);
     const partnerMetric = data.metrics.find(m => m.user_id !== currentUserId);
-
     const myScore = myMetric?.mood_score ?? null;
     const partnerScore = partnerMetric?.mood_score ?? null;
-
     const myOpacity = myScore !== null ? (myScore / 10) * 0.8 : 0;
     const partnerOpacity = partnerScore !== null ? (partnerScore / 10) * 0.8 : 0;
-
     const myColor = `rgba(230, 57, 70, ${myOpacity})`;
     const partnerColor = `rgba(17, 24, 39, ${partnerOpacity})`; 
-
     if (viewMode === 'my') return { backgroundColor: myMetric && myScore !== null ? myColor : 'transparent' };
     if (viewMode === 'partner') return { backgroundColor: partnerMetric && partnerScore !== null ? partnerColor : 'transparent' };
-    
     if (myMetric && myScore !== null && partnerMetric && partnerScore !== null) {
       return { background: `linear-gradient(90deg, ${myColor} 50%, ${partnerColor} 50%)` };
     }
-    
     if (myMetric && myScore !== null) return { backgroundColor: myColor };
     if (partnerMetric && partnerScore !== null) return { backgroundColor: partnerColor };
-    
     return { backgroundColor: 'transparent' };
   };
 
@@ -362,7 +328,7 @@ export function DailyPulse() {
 
   return (
     <div className="flex flex-col h-full bg-gray-50 overflow-hidden">
-      {/* Общая шапка (Новый швейцарский стиль) */}
+      {/* Навигация по месяцам и режимам */}
       <div className="flex items-center justify-between border-b border-gray-100 p-4 bg-white shrink-0">
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-semibold text-gray-900 capitalize">
@@ -412,10 +378,8 @@ export function DailyPulse() {
                 const dayInfo = monthData.find(d => d.date === dateStr);
                 const isSelected = isSameDay(day, selectedDate);
                 const hasTasks = (tasksByDate[dateStr] || []).length > 0;
-                
                 const myM = dayInfo?.metrics.find(m => m.user_id === currentUserId);
                 const partnerM = dayInfo?.metrics.find(m => m.user_id !== currentUserId);
-
                 const showMyConflict = (viewMode === 'my' || viewMode === 'combined') && myM?.has_conflict;
                 const showPartnerConflict = (viewMode === 'partner' || viewMode === 'combined') && partnerM?.has_conflict;
 
@@ -485,10 +449,7 @@ export function DailyPulse() {
                     {myMood !== null ? myMood : '-'}
                   </span>
                   <input 
-                    type="range" 
-                    min="1" 
-                    max="10" 
-                    value={myMood || 5} 
+                    type="range" min="1" max="10" value={myMood || 5} 
                     onChange={(e) => { 
                       const val = Number(e.target.value);
                       setMyMood(val); 
@@ -497,14 +458,7 @@ export function DailyPulse() {
                     className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-terra-500" 
                   />
                   {myMood !== null && (
-                    <button 
-                      onClick={() => {
-                        setMyMood(null);
-                        saveMetrics(null, myIntimacy, myConflict);
-                      }}
-                      className="p-2 text-gray-300 hover:text-red-500 transition-colors cursor-pointer"
-                      title="Сбросить настроение"
-                    >
+                    <button onClick={() => { setMyMood(null); saveMetrics(null, myIntimacy, myConflict); }} className="p-2 text-gray-300 hover:text-red-500 transition-colors cursor-pointer" title="Сбросить настроение">
                       <X className="w-5 h-5" />
                     </button>
                   )}
@@ -513,17 +467,11 @@ export function DailyPulse() {
                   <div className="relative group">
                     <button 
                       onClick={() => { setMyIntimacy(!myIntimacy); saveMetrics(myMood, !myIntimacy, myConflict); }} 
-                      className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
-                        myIntimacy 
-                          ? 'bg-white border-2 border-terra-500 text-terra-500 shadow-md' 
-                          : 'bg-white border border-gray-200 text-gray-400 hover:border-terra-300 hover:text-terra-500'
-                      }`}
+                      className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${myIntimacy ? 'bg-white border-2 border-terra-500 text-terra-500 shadow-md' : 'bg-white border border-gray-200 text-gray-400 hover:border-terra-300 hover:text-terra-500'}`}
                     >
                       <Heart className={`w-5 h-5 ${myIntimacy ? 'fill-terra-500' : ''}`} />
                     </button>
-                    <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                      Близость
-                    </span>
+                    <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">Близость</span>
                   </div>
                   <div className="relative group">
                     <button onClick={() => { setMyConflict(!myConflict); saveMetrics(myMood, myIntimacy, !myConflict); }} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${myConflict ? 'bg-gray-900 text-white shadow-md' : 'bg-white border border-gray-200 text-gray-400 hover:border-gray-900 hover:text-gray-900'}`}><Zap className="w-5 h-5" /></button>
@@ -585,7 +533,6 @@ export function DailyPulse() {
               {/* УПРАВЛЕНИЕ ЗАДАЧАМИ И НАБОРАМИ */}
               {activeTab === 'partner' && (
                 <div className="pt-4 border-t border-gray-100 space-y-6">
-                  
                   {!isAddingTask && !isCreatingSet && (
                     <div className="grid grid-cols-2 gap-3">
                       <button onClick={() => setIsAddingTask(true)} className="py-3 px-4 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 transition-colors flex justify-center items-center gap-2 cursor-pointer">
@@ -597,7 +544,6 @@ export function DailyPulse() {
                     </div>
                   )}
 
-                  {/* Форма: Создать разовую задачу */}
                   {isAddingTask && !isCreatingSet && (
                     <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 space-y-4">
                       <h4 className="text-sm font-semibold text-gray-900">Новая задача</h4>
@@ -618,7 +564,6 @@ export function DailyPulse() {
                     </div>
                   )}
 
-                  {/* Форма: Создать набор шаблонов */}
                   {isCreatingSet && (
                     <div className="bg-white p-5 rounded-2xl border-2 border-dashed border-gray-200 space-y-5">
                       <div>
@@ -648,10 +593,8 @@ export function DailyPulse() {
                     </div>
                   )}
 
-                  {/* Отображение сохраненных Наборов и Шаблонов */}
                   {!isAddingTask && !isCreatingSet && (templateSets.length > 0 || templates.length > 0) && (
                     <div className="space-y-5">
-                      
                       {templateSets.length > 0 && (
                         <div className="space-y-3">
                           <p className="text-sm font-medium text-gray-500">Ваши наборы</p>
@@ -674,7 +617,6 @@ export function DailyPulse() {
                           </div>
                         </div>
                       )}
-
                       {templates.length > 0 && (
                         <div className="space-y-3">
                           <p className="text-sm font-medium text-gray-500">Одиночные шаблоны</p>
@@ -690,10 +632,8 @@ export function DailyPulse() {
                       )}
                     </div>
                   )}
-
                 </div>
               )}
-
             </motion.div>
           </AnimatePresence>
         </aside>
