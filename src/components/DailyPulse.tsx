@@ -4,9 +4,24 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, CheckCircle2, Plus, X, Copy, BookmarkPlus, Heart, Zap, Sparkles, Trash2, ListPlus } from 'lucide-react';
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  CheckCircle2, 
+  Plus, 
+  X, 
+  Copy, 
+  BookmarkPlus, 
+  Heart, 
+  Zap, 
+  Sparkles, 
+  Trash2, 
+  ListPlus 
+} from 'lucide-react';
 import supabase from '@/lib/supabase';
 import { useSpaceAuth } from '@/hooks/useSpaceAuth';
+
+// ── Interfaces ────────────────────────────────────────────────────────────────
 
 interface Task {
   id: string;
@@ -85,6 +100,8 @@ export function DailyPulse() {
     end: endOfMonth(currentMonth),
   }), [currentMonth]);
 
+  // ── Data Fetching ────────────────────────────────────────────────────────────
+
   useEffect(() => {
     if (!spaceId || !currentUserId) return;
     async function getPartner() {
@@ -124,6 +141,7 @@ export function DailyPulse() {
   const fetchMonthActivity = useCallback(async () => {
     if (isAuthLoading || !spaceId || !currentUserId) { setIsDataLoading(false); return; }
     setIsDataLoading(true);
+
     try {
       if (!inviteCode) {
         const { data: space } = await supabase.from('spaces').select('invite_code').eq('id', spaceId).single();
@@ -186,6 +204,8 @@ export function DailyPulse() {
     }
   }, [selectedDate, monthData, currentUserId]);
 
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+
   const saveMetrics = async (val: number | null, intim: boolean, conf: boolean) => {
     if (!spaceId || !currentUserId) return;
     await supabase.from('daily_metrics').upsert({
@@ -193,16 +213,6 @@ export function DailyPulse() {
     }, { onConflict: 'user_id, date' });
     fetchMonthActivity();
   };
-
-  const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
-  const allCurrentTasks = tasksByDate[selectedDateStr] || [];
-  const myTasks = allCurrentTasks.filter(t => t.author_id !== currentUserId);
-  const partnerTasks = allCurrentTasks.filter(t => t.author_id === currentUserId);
-  const displayedTasks = activeTab === 'my' ? myTasks : partnerTasks;
-
-  const earnedPoints = displayedTasks.filter(t => t.is_completed).reduce((sum, t) => sum + t.points, 0);
-  const pendingPoints = displayedTasks.filter(t => t.is_ready && !t.is_completed).reduce((sum, t) => sum + t.points, 0);
-  const totalPoints = displayedTasks.reduce((sum, t) => sum + t.points, 0);
 
   const handleToggleReady = async (taskId: string, currentReady: boolean) => {
     setTasksByDate(prev => ({ ...prev, [selectedDateStr]: prev[selectedDateStr].map(t => t.id === taskId ? { ...t, is_ready: !currentReady } : t) }));
@@ -234,7 +244,15 @@ export function DailyPulse() {
     }
   };
 
-  const addMultipleTasksToDatabase = async (tasksToAdd: {content: string, points: number}[]) => {
+  const handleAddTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTaskText.trim()) return;
+    await addTaskToDatabase(newTaskText.trim(), newTaskPoints);
+    fetchMonthActivity();
+    setNewTaskText(''); setNewTaskPoints(1); setIsAddingTask(false);
+  };
+
+  const handleUseTemplateSet = async (set: TemplateSet) => {
     if (!spaceId || !currentUserId || !partnerId) return;
     let { data: checklist } = await supabase.from('checklists').select('id').eq('space_id', spaceId).eq('date', selectedDateStr).maybeSingle();
     if (!checklist) {
@@ -242,7 +260,7 @@ export function DailyPulse() {
       checklist = nC;
     }
     if (checklist) {
-      const itemsToInsert = tasksToAdd.map((task, index) => ({
+      const items = set.tasks.map((task, index) => ({
         checklist_id: checklist.id,
         space_id: spaceId,
         user_id: currentUserId,
@@ -252,44 +270,10 @@ export function DailyPulse() {
         is_ready: false,
         is_completed: false
       }));
-      await supabase.from('checklist_items').insert(itemsToInsert);
+      await supabase.from('checklist_items').insert(items);
+      fetchMonthActivity();
+      setIsAddingTask(false);
     }
-  };
-
-  const handleAddTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTaskText.trim()) return;
-    await addTaskToDatabase(newTaskText.trim(), newTaskPoints);
-    fetchMonthActivity();
-    setNewTaskText(''); setNewTaskPoints(1); setIsAddingTask(false);
-  };
-
-  const handleSaveTemplate = async () => {
-    if (!newTaskText.trim() || !spaceId || !currentUserId) return;
-    const { data } = await supabase.from('task_templates').insert({
-      space_id: spaceId, user_id: currentUserId, content: newTaskText.trim(), points: newTaskPoints
-    }).select('id, content, points').single();
-    if (data) setTemplates(prev => [...prev, data]);
-  };
-
-  const handleSaveSet = async () => {
-    if (!newSetTitle.trim() || newSetTasks.some(t => !t.content.trim()) || !spaceId || !currentUserId) return;
-    const total = newSetTasks.reduce((sum, t) => sum + (Number(t.points) || 0), 0);
-    const payload = JSON.stringify({ isSet: true, title: newSetTitle.trim(), tasks: newSetTasks.filter(t => t.content.trim()) });
-    const { data } = await supabase.from('task_templates').insert({
-      space_id: spaceId, user_id: currentUserId, content: payload, points: total
-    }).select('id, content, points').single();
-    if (data) {
-      const parsed = JSON.parse(data.content);
-      setTemplateSets(prev => [...prev, { id: data.id, title: parsed.title, tasks: parsed.tasks, totalPoints: data.points }]);
-      setIsCreatingSet(false); setNewSetTitle(''); setNewSetTasks([{ content: '', points: 1 }]);
-    }
-  };
-
-  const handleUseTemplateSet = async (set: TemplateSet) => {
-    await addMultipleTasksToDatabase(set.tasks);
-    fetchMonthActivity();
-    setIsAddingTask(false);
   };
 
   const handleDeleteTemplate = async (templateId: string, isSet: boolean = false) => {
@@ -302,6 +286,18 @@ export function DailyPulse() {
     await supabase.from('checklist_items').delete().eq('id', taskId);
     setTasksByDate(prev => ({ ...prev, [selectedDateStr]: prev[selectedDateStr].filter(t => t.id !== taskId) }));
   };
+
+  // ── UI Helpers ───────────────────────────────────────────────────────────────
+
+  const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+  const allCurrentTasks = tasksByDate[selectedDateStr] || [];
+  const myTasks = allCurrentTasks.filter(t => t.author_id !== currentUserId);
+  const partnerTasks = allCurrentTasks.filter(t => t.author_id === currentUserId);
+  const displayedTasks = activeTab === 'my' ? myTasks : partnerTasks;
+
+  const earnedPoints = displayedTasks.filter(t => t.is_completed).reduce((sum, t) => sum + t.points, 0);
+  const pendingPoints = displayedTasks.filter(t => t.is_ready && !t.is_completed).reduce((sum, t) => sum + t.points, 0);
+  const totalPoints = displayedTasks.reduce((sum, t) => sum + t.points, 0);
 
   const getDayStyle = (dateStr: string) => {
     const data = monthData.find(d => d.date === dateStr);
@@ -328,7 +324,7 @@ export function DailyPulse() {
 
   return (
     <div className="flex flex-col h-full bg-gray-50 overflow-hidden">
-      {/* Навигация по месяцам и режимам */}
+      {/* ── Calendar Header ───────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between border-b border-gray-100 p-4 bg-white shrink-0">
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-semibold text-gray-900 capitalize">
@@ -363,7 +359,7 @@ export function DailyPulse() {
       </div>
 
       <div className="flex flex-grow flex-col lg:flex-row min-h-0 overflow-hidden">
-        {/* ЛЕВАЯ ПАНЕЛЬ: Календарь */}
+        {/* ── Left Side: Grid ──────────────────────────────────────────────────── */}
         <div className="flex-grow flex flex-col bg-gray-50 border-r border-gray-100 overflow-hidden">
           <div className="grid grid-cols-7 border-b border-gray-100 bg-white/40 shrink-0">
             {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(day => (
@@ -378,10 +374,9 @@ export function DailyPulse() {
                 const dayInfo = monthData.find(d => d.date === dateStr);
                 const isSelected = isSameDay(day, selectedDate);
                 const hasTasks = (tasksByDate[dateStr] || []).length > 0;
+                
                 const myM = dayInfo?.metrics.find(m => m.user_id === currentUserId);
                 const partnerM = dayInfo?.metrics.find(m => m.user_id !== currentUserId);
-                const showMyConflict = (viewMode === 'my' || viewMode === 'combined') && myM?.has_conflict;
-                const showPartnerConflict = (viewMode === 'partner' || viewMode === 'combined') && partnerM?.has_conflict;
 
                 return (
                   <button
@@ -394,32 +389,21 @@ export function DailyPulse() {
                       <span className={`text-lg font-medium ${isToday(day) ? 'text-terra-600 font-bold underline' : 'text-gray-400 group-hover:text-gray-600'}`}>
                         {format(day, 'd')}
                       </span>
-                      {viewMode === 'combined' && (myM || partnerM) && <div className="text-[10px] text-gray-400 font-medium mt-1">Me | P</div>}
                     </div>
 
-                    {(showMyConflict || showPartnerConflict) && (
-                      <div className="absolute inset-0 opacity-[0.05] pointer-events-none z-20" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #000 0, #000 1px, transparent 0, transparent 50%)', backgroundSize: '7px 7px' }} />
-                    )}
-                    
                     <div className="flex w-full justify-between items-end z-30 mt-auto">
-                      {(viewMode === 'my' || viewMode === 'combined') ? (
-                        <div className="flex gap-1 items-center w-1/3">
-                          {myM?.has_intimacy && <Heart className="w-2.5 h-2.5 text-terra-600 fill-terra-600" />}
-                          {myM?.has_conflict && <Zap className="w-2.5 h-2.5 text-gray-900" />}
-                        </div>
-                      ) : <div className="w-1/3" />}
-
+                      <div className="flex gap-1 items-center w-1/3">
+                        {myM?.has_intimacy && <Heart className="w-2.5 h-2.5 text-terra-600 fill-terra-600" />}
+                        {myM?.has_conflict && <Zap className="w-2.5 h-2.5 text-gray-900" />}
+                      </div>
                       <div className="flex flex-col items-center gap-1 opacity-40 w-1/3">
                         {dayInfo?.hasSurprise && <Sparkles className="w-2.5 h-2.5 text-terra-500 fill-terra-500" />}
                         {hasTasks && <div className="w-1.5 h-1.5 bg-gray-900 rounded-full" />}
                       </div>
-
-                      {(viewMode === 'partner' || viewMode === 'combined') ? (
-                        <div className="flex gap-1 items-center justify-end w-1/3">
-                          {partnerM?.has_conflict && <Zap className="w-2.5 h-2.5 text-white drop-shadow-sm" />}
-                          {partnerM?.has_intimacy && <Heart className="w-2.5 h-2.5 text-gray-900 fill-gray-900 opacity-60" />}
-                        </div>
-                      ) : <div className="w-1/3" />}
+                      <div className="flex gap-1 items-center justify-end w-1/3">
+                        {partnerM?.has_conflict && <Zap className="w-2.5 h-2.5 text-white drop-shadow-sm" />}
+                        {partnerM?.has_intimacy && <Heart className="w-2.5 h-2.5 text-gray-900 fill-gray-900 opacity-60" />}
+                      </div>
                     </div>
                   </button>
                 );
@@ -428,7 +412,7 @@ export function DailyPulse() {
           </div>
         </div>
 
-        {/* ПРАВАЯ ПАНЕЛЬ */}
+        {/* ── Right Side: Details ─────────────────────────────────────────────── */}
         <aside className="w-full lg:w-[420px] flex flex-col bg-white overflow-y-auto border-l border-gray-100">
           <AnimatePresence mode="wait">
             <motion.div key={selectedDate.toString()} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="p-6 sm:p-8 space-y-8">
@@ -441,199 +425,94 @@ export function DailyPulse() {
                 <p className="text-sm text-gray-400 font-medium">Детали дня</p>
               </div>
 
-              {/* Блок Настроения */}
+              {/* Mood & Metrics */}
               <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
                 <p className="text-sm font-medium text-gray-500 mb-5">Твоё настроение</p>
                 <div className="flex items-center gap-5 mb-6">
-                  <span className="text-4xl font-bold text-gray-900 w-10 text-center">
-                    {myMood !== null ? myMood : '-'}
-                  </span>
-                  <input 
-                    type="range" min="1" max="10" value={myMood || 5} 
-                    onChange={(e) => { 
-                      const val = Number(e.target.value);
-                      setMyMood(val); 
-                      saveMetrics(val, myIntimacy, myConflict); 
-                    }} 
-                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-terra-500" 
-                  />
+                  <span className="text-4xl font-bold text-gray-900 w-10 text-center">{myMood !== null ? myMood : '-'}</span>
+                  <input type="range" min="1" max="10" value={myMood || 5} onChange={(e) => { const val = Number(e.target.value); setMyMood(val); saveMetrics(val, myIntimacy, myConflict); }} className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-terra-500" />
                   {myMood !== null && (
-                    <button onClick={() => { setMyMood(null); saveMetrics(null, myIntimacy, myConflict); }} className="p-2 text-gray-300 hover:text-red-500 transition-colors cursor-pointer" title="Сбросить настроение">
-                      <X className="w-5 h-5" />
-                    </button>
+                    <button onClick={() => { setMyMood(null); saveMetrics(null, myIntimacy, myConflict); }} className="p-2 text-gray-300 hover:text-red-500 transition-colors cursor-pointer"><X className="w-5 h-5" /></button>
                   )}
                 </div>
                 <div className="flex gap-4">
-                  <div className="relative group">
-                    <button 
-                      onClick={() => { setMyIntimacy(!myIntimacy); saveMetrics(myMood, !myIntimacy, myConflict); }} 
-                      className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${myIntimacy ? 'bg-white border-2 border-terra-500 text-terra-500 shadow-md' : 'bg-white border border-gray-200 text-gray-400 hover:border-terra-300 hover:text-terra-500'}`}
-                    >
-                      <Heart className={`w-5 h-5 ${myIntimacy ? 'fill-terra-500' : ''}`} />
-                    </button>
-                    <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">Близость</span>
-                  </div>
-                  <div className="relative group">
-                    <button onClick={() => { setMyConflict(!myConflict); saveMetrics(myMood, myIntimacy, !myConflict); }} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${myConflict ? 'bg-gray-900 text-white shadow-md' : 'bg-white border border-gray-200 text-gray-400 hover:border-gray-900 hover:text-gray-900'}`}><Zap className="w-5 h-5" /></button>
-                    <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">Конфликт</span>
-                  </div>
+                  <button onClick={() => { setMyIntimacy(!myIntimacy); saveMetrics(myMood, !myIntimacy, myConflict); }} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${myIntimacy ? 'bg-white border-2 border-terra-500 text-terra-500 shadow-md' : 'bg-white border border-gray-200 text-gray-400'}`}><Heart className={`w-5 h-5 ${myIntimacy ? 'fill-terra-500' : ''}`} /></button>
+                  <button onClick={() => { setMyConflict(!myConflict); saveMetrics(myMood, myIntimacy, !myConflict); }} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${myConflict ? 'bg-gray-900 text-white shadow-md' : 'bg-white border border-gray-200 text-gray-400'}`}><Zap className="w-5 h-5" /></button>
                 </div>
               </div>
 
-              {/* Табы Задач */}
+              {/* Tasks Tab Control */}
               <div className="flex bg-gray-100 p-1 rounded-xl">
-                <button onClick={() => { setActiveTab('my'); setIsAddingTask(false); setIsCreatingSet(false); }} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${activeTab === 'my' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Мои задачи</button>
-                <button onClick={() => { setActiveTab('partner'); setIsAddingTask(false); setIsCreatingSet(false); }} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${activeTab === 'partner' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Задачи партнера</button>
+                <button onClick={() => { setActiveTab('my'); setIsAddingTask(false); }} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${activeTab === 'my' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>Мои задачи</button>
+                <button onClick={() => { setActiveTab('partner'); setIsAddingTask(false); }} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${activeTab === 'partner' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>Задачи партнера</button>
               </div>
 
               {activeTab === 'partner' && pendingPoints > 0 && (
                 <div className="flex items-center justify-between bg-orange-50 border border-orange-100 p-4 rounded-xl">
-                  <div>
-                    <span className="text-sm font-medium text-orange-800 block">Ждут проверки</span>
-                    <span className="text-xs text-orange-600">На сумму +{pendingPoints} баллов</span>
-                  </div>
-                  <button onClick={handleReviewDay} className="text-sm font-medium bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors shadow-sm cursor-pointer">Подтвердить всё</button>
+                  <div className="text-sm font-medium text-orange-800">Ждут проверки (+{pendingPoints})</div>
+                  <button onClick={handleReviewDay} className="text-sm font-medium bg-orange-500 text-white px-4 py-2 rounded-lg cursor-pointer">Подтвердить всё</button>
                 </div>
               )}
 
-              {/* Список задач */}
+              {/* Tasks List */}
               <div className="space-y-3">
                 {displayedTasks.map(task => {
                   const isMyTab = activeTab === 'my';
-                  const isCompleted = task.is_completed;
-                  const isWaiting = task.is_ready && !isCompleted;
-                  const isChecked = isCompleted || (isMyTab && task.is_ready);
-
+                  const isChecked = task.is_completed || (isMyTab && task.is_ready);
                   return (
                     <div key={task.id} className="group flex items-start gap-3 relative">
-                      <label className={`flex-1 flex items-start gap-3 p-4 rounded-xl border transition-colors ${isCompleted ? 'bg-gray-50 border-transparent' : isWaiting ? 'bg-orange-50/30 border-orange-200' : 'bg-white border-gray-200 hover:border-gray-300'} ${isCompleted ? 'cursor-default' : 'cursor-pointer'}`}>
-                        <div className="mt-0.5">
-                          <input type="checkbox" className="w-5 h-5 rounded border-gray-300 text-terra-500 focus:ring-terra-500 cursor-pointer" checked={isChecked} disabled={isCompleted} onChange={() => { if (isMyTab) handleToggleReady(task.id, task.is_ready); else handleToggleCompleted(task.id, task.is_completed); }} />
-                        </div>
-                        <div className="flex-1">
-                          <span className={`text-base font-medium transition-colors ${isChecked ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{task.content}</span>
-                          {isWaiting && (
-                            <div className="mt-1 flex items-center gap-1.5">
-                              <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span></span>
-                              <span className="text-xs font-medium text-orange-600">Ожидает проверки</span>
-                            </div>
-                          )}
-                        </div>
-                        <span className={`text-sm font-semibold px-2 py-1 rounded-md ${isChecked ? 'bg-gray-100 text-gray-400' : 'bg-terra-50 text-terra-600'}`}>+{task.points}</span>
+                      <label className={`flex-1 flex items-start gap-3 p-4 rounded-xl border transition-colors ${task.is_completed ? 'bg-gray-50 border-transparent' : 'bg-white border-gray-200'} cursor-pointer`}>
+                        <input type="checkbox" className="mt-1 w-5 h-5 rounded border-gray-300 text-terra-500 cursor-pointer" checked={isChecked} disabled={task.is_completed} onChange={() => { if (isMyTab) handleToggleReady(task.id, task.is_ready); else handleToggleCompleted(task.id, task.is_completed); }} />
+                        <span className={`flex-1 text-base font-medium ${isChecked ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{task.content}</span>
+                        <span className="text-sm font-semibold text-terra-600">+{task.points}</span>
                       </label>
-                      {!isMyTab && !isCompleted && (
-                        <button onClick={() => handleDeleteTask(task.id)} className="absolute -right-2 -top-2 bg-white border border-gray-200 rounded-full p-1.5 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 hover:border-red-200 transition-all cursor-pointer shadow-sm"><X className="w-3 h-3" /></button>
+                      {!isMyTab && !task.is_completed && (
+                        <button onClick={() => handleDeleteTask(task.id)} className="absolute -right-2 -top-2 bg-white border border-gray-200 rounded-full p-1.5 opacity-0 group-hover:opacity-100 hover:text-red-500 cursor-pointer shadow-sm"><X className="w-3 h-3" /></button>
                       )}
                     </div>
                   );
                 })}
-                {displayedTasks.length === 0 && !isAddingTask && <p className="text-sm text-gray-400 text-center py-8">{activeTab === 'my' ? 'Партнер еще не назначил задачи' : 'Задач пока нет'}</p>}
               </div>
 
-              {/* УПРАВЛЕНИЕ ЗАДАЧАМИ И НАБОРАМИ */}
+              {/* Add Task / Templates */}
               {activeTab === 'partner' && (
-                <div className="pt-4 border-t border-gray-100 space-y-6">
-                  {!isAddingTask && !isCreatingSet && (
+                <div className="pt-4 border-t border-gray-100 space-y-4">
+                  {!isAddingTask && (
                     <div className="grid grid-cols-2 gap-3">
-                      <button onClick={() => setIsAddingTask(true)} className="py-3 px-4 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 transition-colors flex justify-center items-center gap-2 cursor-pointer">
-                        <Plus className="w-4 h-4 text-terra-500" /> Разовая задача
-                      </button>
-                      <button onClick={() => setIsCreatingSet(true)} className="py-3 px-4 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 transition-colors flex justify-center items-center gap-2 cursor-pointer">
-                        <ListPlus className="w-4 h-4 text-gray-400" /> Создать набор
-                      </button>
+                      <button onClick={() => setIsAddingTask(true)} className="py-3 px-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 flex justify-center items-center gap-2 cursor-pointer"><Plus className="w-4 h-4 text-terra-500" /> Задача</button>
+                      <button onClick={() => setIsCreatingSet(true)} className="py-3 px-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 flex justify-center items-center gap-2 cursor-pointer"><ListPlus className="w-4 h-4 text-gray-400" /> Набор</button>
                     </div>
                   )}
 
-                  {isAddingTask && !isCreatingSet && (
+                  {isAddingTask && (
                     <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 space-y-4">
-                      <h4 className="text-sm font-semibold text-gray-900">Новая задача</h4>
                       <form onSubmit={handleAddTask} className="flex gap-2">
-                        <input type="text" value={newTaskText} onChange={e => setNewTaskText(e.target.value)} placeholder="Что нужно сделать?" className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-terra-500/20 focus:border-terra-500 transition-shadow text-gray-900" autoFocus />
-                        <div className="bg-white border border-gray-200 rounded-xl flex items-center px-2">
-                          <span className="text-gray-400 text-sm font-medium">+</span>
-                          <input type="number" min="1" max="999" value={newTaskPoints} onChange={e => setNewTaskPoints(Number(e.target.value))} className="w-10 bg-transparent text-sm font-semibold text-terra-600 text-center outline-none" />
-                        </div>
+                        <input type="text" value={newTaskText} onChange={e => setNewTaskText(e.target.value)} placeholder="Что нужно сделать?" className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-terra-500" autoFocus />
+                        <input type="number" min="1" value={newTaskPoints} onChange={e => setNewTaskPoints(Number(e.target.value))} className="w-16 bg-white border border-gray-200 rounded-xl text-center text-sm font-semibold text-terra-600 outline-none" />
                       </form>
-                      <div className="flex items-center justify-between pt-2">
-                        <button type="button" onClick={handleSaveTemplate} disabled={!newTaskText.trim()} className="text-xs font-medium text-gray-500 hover:text-terra-600 disabled:opacity-30 flex items-center gap-1"><BookmarkPlus className="w-4 h-4" /> В шаблоны</button>
-                        <div className="flex gap-2">
-                          <button onClick={() => setIsAddingTask(false)} className="px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-200 rounded-lg">Отмена</button>
-                          <button onClick={handleAddTask} className="px-4 py-2 text-sm font-medium bg-gray-900 text-white hover:bg-black rounded-lg">Добавить</button>
-                        </div>
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => setIsAddingTask(false)} className="px-4 py-2 text-sm text-gray-500">Отмена</button>
+                        <button onClick={handleAddTask} className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg">Добавить</button>
                       </div>
                     </div>
                   )}
 
-                  {isCreatingSet && (
-                    <div className="bg-white p-5 rounded-2xl border-2 border-dashed border-gray-200 space-y-5">
-                      <div>
-                        <label className="text-xs font-medium text-gray-500 mb-1.5 block">Название набора</label>
-                        <input type="text" value={newSetTitle} onChange={e => setNewSetTitle(e.target.value)} placeholder="Например: Уборка перед гостями" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-terra-500 font-semibold" autoFocus />
-                      </div>
-                      <div className="space-y-3">
-                        <label className="text-xs font-medium text-gray-500 mb-1 block">Задачи в наборе</label>
-                        {newSetTasks.map((t, idx) => (
-                          <div key={idx} className="flex gap-2 items-center">
-                            <input value={t.content} onChange={e => { const updated = [...newSetTasks]; updated[idx].content = e.target.value; setNewSetTasks(updated); }} className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-terra-400 outline-none" placeholder={`Шаг ${idx + 1}`} />
-                            <div className="bg-white border border-gray-200 rounded-lg flex items-center px-2">
-                              <span className="text-gray-400 text-xs">+</span>
-                              <input type="number" min="1" value={t.points} onChange={e => { const updated = [...newSetTasks]; updated[idx].points = Number(e.target.value); setNewSetTasks(updated); }} className="w-10 py-2 text-sm font-semibold text-terra-600 text-center outline-none" />
-                            </div>
-                            {newSetTasks.length > 1 && (
-                              <button onClick={() => setNewSetTasks(newSetTasks.filter((_, i) => i !== idx))} className="p-2 text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
-                            )}
-                          </div>
-                        ))}
-                        <button onClick={() => setNewSetTasks([...newSetTasks, { content: '', points: 1 }])} className="text-sm text-terra-600 font-medium flex items-center gap-1.5 py-2 hover:opacity-80 transition-opacity"><Plus className="w-4 h-4" /> Добавить шаг</button>
-                      </div>
-                      <div className="flex gap-3 pt-2 border-t border-gray-100">
-                        <button onClick={() => setIsCreatingSet(false)} className="flex-1 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-100 rounded-xl">Отмена</button>
-                        <button onClick={handleSaveSet} className="flex-1 py-2.5 text-sm font-medium bg-gray-900 text-white hover:bg-black rounded-xl">Сохранить набор</button>
-                      </div>
-                    </div>
-                  )}
-
-                  {!isAddingTask && !isCreatingSet && (templateSets.length > 0 || templates.length > 0) && (
-                    <div className="space-y-5">
-                      {templateSets.length > 0 && (
-                        <div className="space-y-3">
-                          <p className="text-sm font-medium text-gray-500">Ваши наборы</p>
-                          <div className="grid grid-cols-1 gap-3">
-                            {templateSets.map(set => (
-                              <div key={set.id} className="border border-gray-200 rounded-2xl p-4 bg-white shadow-sm flex flex-col group relative">
-                                <div className="flex justify-between items-start mb-2 pr-4">
-                                  <h4 className="font-semibold text-gray-900">{set.title}</h4>
-                                  <span className="text-xs font-medium bg-gray-100 text-gray-600 px-2 py-1 rounded-md">{set.tasks.length} задач</span>
-                                </div>
-                                <div className="text-sm text-gray-500 mb-4 line-clamp-2">
-                                  {set.tasks.map(t => t.content).join(' • ')}
-                                </div>
-                                <button onClick={() => handleUseTemplateSet(set)} className="w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-black transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm">
-                                  <CheckCircle2 className="w-4 h-4" /> Добавить весь набор (+{set.totalPoints})
-                                </button>
-                                <button onClick={() => handleDeleteTemplate(set.id, true)} className="absolute -top-2 -right-2 bg-white border border-gray-200 p-1.5 rounded-full text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm cursor-pointer"><X className="w-4 h-4"/></button>
-                              </div>
-                            ))}
-                          </div>
+                  {/* Templates List */}
+                  {!isAddingTask && templateSets.length > 0 && (
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium text-gray-500">Ваши наборы</p>
+                      {templateSets.map(set => (
+                        <div key={set.id} className="border border-gray-200 rounded-2xl p-4 bg-white shadow-sm flex flex-col group relative">
+                          <h4 className="font-semibold text-gray-900 mb-2">{set.title}</h4>
+                          <button onClick={() => handleUseTemplateSet(set)} className="w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-sm"><CheckCircle2 className="w-4 h-4" /> Добавить (+{set.totalPoints})</button>
+                          <button onClick={() => handleDeleteTemplate(set.id, true)} className="absolute -top-2 -right-2 bg-white border border-gray-200 p-1.5 rounded-full text-gray-400 opacity-0 group-hover:opacity-100 hover:text-red-500 cursor-pointer shadow-sm"><X className="w-4 h-4"/></button>
                         </div>
-                      )}
-                      {templates.length > 0 && (
-                        <div className="space-y-3">
-                          <p className="text-sm font-medium text-gray-500">Одиночные шаблоны</p>
-                          <div className="flex flex-wrap gap-2">
-                            {templates.map(t => (
-                              <button key={t.id} onClick={() => { addTaskToDatabase(t.content, t.points); fetchMonthActivity(); }} className="group relative text-sm font-medium bg-white border border-gray-200 px-3 py-2 rounded-xl hover:border-terra-300 hover:text-terra-600 transition-colors cursor-pointer flex items-center gap-1.5 pr-8 shadow-sm">
-                                <span className="text-terra-500 font-bold">+{t.points}</span> {t.content}
-                                <span onClick={(e) => { e.stopPropagation(); handleDeleteTemplate(t.id, false); }} className="absolute right-2 p-1 text-gray-300 hover:text-red-500 rounded-md transition-colors"><X className="w-3.5 h-3.5" /></span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      ))}
                     </div>
                   )}
                 </div>
               )}
+
             </motion.div>
           </AnimatePresence>
         </aside>

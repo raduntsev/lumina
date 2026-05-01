@@ -10,7 +10,6 @@ import { useSpaceAuth } from '@/hooks/useSpaceAuth';
 export function Header() {
   const [isStoreOpen, setIsStoreOpen] = useState(false);
   const [isLettersOpen, setIsLettersOpen] = useState(false);
-  
   const { spaceId, user, profile, signOut } = useSpaceAuth();
   
   const [unreadLettersCount, setUnreadLettersCount] = useState(0);
@@ -40,13 +39,13 @@ export function Header() {
       setPendingOrdersCount(count || 0);
     };
 
-    // Функция для получения реальной суммы баллов за выполненные задачи
+    // Точный подсчет баллов за выполненные задачи
     const fetchBalance = async () => {
       const { data } = await supabase
         .from('checklist_items')
         .select('points')
         .eq('space_id', spaceId)
-        .eq('user_id', user.id) // Считаем баллы за задачи, выполненные ЭТИМ пользователем
+        .eq('user_id', user.id)
         .eq('is_completed', true);
       
       const total = data?.reduce((sum, item) => sum + (item.points || 0), 0) || 0;
@@ -58,16 +57,9 @@ export function Header() {
     fetchBalance();
 
     const channel = supabase.channel('header_sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'letters', filter: `space_id=eq.${spaceId}` }, () => {
-        fetchUnreadLetters();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_purchases', filter: `space_id=eq.${spaceId}` }, () => {
-        fetchPendingOrders();
-      })
-      // Слушаем изменения в задачах, чтобы обновлять баланс в реальном времени
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'checklist_items', filter: `space_id=eq.${spaceId}` }, () => {
-        fetchBalance();
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'letters', filter: `space_id=eq.${spaceId}` }, fetchUnreadLetters)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_purchases', filter: `space_id=eq.${spaceId}` }, fetchPendingOrders)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'checklist_items', filter: `space_id=eq.${spaceId}` }, fetchBalance)
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -115,18 +107,13 @@ export function Header() {
         <div className="flex items-center gap-3">
           {profile && (
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg cursor-default">
-              <span className="text-sm font-medium text-gray-700">
-                {profile.display_name || 'Партнер'}
-              </span>
+              <span className="text-sm font-medium text-gray-700">{profile.display_name || 'Партнер'}</span>
               <span className="text-gray-300 text-xs">•</span>
-              <span className="text-sm font-bold text-terra-600">
-                {dynamicBalance}
-              </span>
+              <span className="text-sm font-bold text-terra-600">{dynamicBalance}</span>
             </div>
           )}
-          
           <button onClick={signOut} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer group">
-            <LogOut className="w-5 h-5 group-hover:scale-105 transition-transform" />
+            <LogOut className="w-5 h-5" />
           </button>
         </div>
       </div>
