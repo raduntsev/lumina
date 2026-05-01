@@ -3,14 +3,16 @@
 import React, { useState, useEffect } from 'react';
 import { StoreModal } from './StoreModal';
 import { LettersModal } from './LettersModal';
-import { Store, Mail, Settings, Archive } from 'lucide-react';
+import { Store, Mail, Settings, Archive, LogOut } from 'lucide-react';
 import supabase from '@/lib/supabase';
 import { useSpaceAuth } from '@/hooks/useSpaceAuth';
 
 export function Header() {
   const [isStoreOpen, setIsStoreOpen] = useState(false);
   const [isLettersOpen, setIsLettersOpen] = useState(false);
-  const { spaceId, user } = useSpaceAuth();
+  
+  // Достаем profile и signOut из контекста
+  const { spaceId, user, profile, signOut } = useSpaceAuth();
   
   const [unreadLettersCount, setUnreadLettersCount] = useState(0);
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
@@ -63,56 +65,82 @@ export function Header() {
         </h1>
       </div>
 
-      {/* Навигация */}
-      <nav className="flex items-center gap-2 sm:gap-4">
-        
-        {/* Кнопка: Письма */}
-        <button 
-          onClick={() => setIsLettersOpen(true)} 
-          className="flex items-center gap-2.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-all cursor-pointer group"
-        >
-          <div className="relative">
-            <Mail className="w-5 h-5 text-gray-400 group-hover:text-terra-500 transition-colors" />
-            {unreadLettersCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-terra-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-terra-500 border-2 border-white"></span>
-              </span>
-            )}
-          </div>
-          <span className="hidden sm:inline-block text-sm font-medium">Письма</span>
-        </button>
+      <div className="flex items-center gap-4 sm:gap-6">
+        {/* Навигация */}
+        <nav className="flex items-center gap-2 sm:gap-4">
+          
+          {/* Кнопка: Письма */}
+          <button 
+            onClick={() => setIsLettersOpen(true)} 
+            className="flex items-center gap-2.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-all cursor-pointer group"
+          >
+            <div className="relative">
+              <Mail className="w-5 h-5 text-gray-400 group-hover:text-terra-500 transition-colors" />
+              {unreadLettersCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-terra-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-terra-500 border-2 border-white"></span>
+                </span>
+              )}
+            </div>
+            <span className="hidden sm:inline-block text-sm font-medium">Письма</span>
+          </button>
 
-        {/* Кнопка: Награды (Магазин) */}
-        <button 
-          onClick={() => setIsStoreOpen(true)} 
-          className="flex items-center gap-2.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-all cursor-pointer group"
-        >
-          <div className="relative">
-            <Store className="w-5 h-5 text-gray-400 group-hover:text-terra-500 transition-colors" />
-            {pendingOrdersCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-terra-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-terra-500 border-2 border-white"></span>
-              </span>
-            )}
-          </div>
-          <span className="hidden sm:inline-block text-sm font-medium">Награды</span>
-        </button>
-        
+          {/* Кнопка: Награды (Магазин) */}
+          <button 
+            onClick={() => setIsStoreOpen(true)} 
+            className="flex items-center gap-2.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-all cursor-pointer group"
+          >
+            <div className="relative">
+              <Store className="w-5 h-5 text-gray-400 group-hover:text-terra-500 transition-colors" />
+              {pendingOrdersCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-terra-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-terra-500 border-2 border-white"></span>
+                </span>
+              )}
+            </div>
+            <span className="hidden sm:inline-block text-sm font-medium">Награды</span>
+          </button>
+          
+          {/* Неактивные кнопки */}
+          <button className="hidden sm:flex items-center gap-2.5 px-3 py-2 text-gray-300 cursor-not-allowed">
+            <Archive className="w-5 h-5" />
+            <span className="text-sm font-medium">Архив</span>
+          </button>
+          <button className="hidden sm:flex items-center gap-2.5 px-3 py-2 text-gray-300 cursor-not-allowed">
+            <Settings className="w-5 h-5" />
+            <span className="text-sm font-medium">Настройки</span>
+          </button>
+        </nav>
+
         {/* Разделитель */}
-        <div className="w-px h-6 bg-gray-200 mx-2 hidden sm:block" />
+        <div className="w-px h-6 bg-gray-200 hidden md:block" />
 
-        {/* Неактивные кнопки */}
-        <button className="hidden sm:flex items-center gap-2.5 px-3 py-2 text-gray-300 cursor-not-allowed">
-          <Archive className="w-5 h-5" />
-          <span className="text-sm font-medium">Архив</span>
-        </button>
-        <button className="hidden sm:flex items-center gap-2.5 px-3 py-2 text-gray-300 cursor-not-allowed">
-          <Settings className="w-5 h-5" />
-          <span className="text-sm font-medium">Настройки</span>
-        </button>
-      </nav>
+        {/* Блок пользователя и выхода */}
+        <div className="flex items-center gap-3">
+          {profile && (
+            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg cursor-default">
+              <span className="text-sm font-medium text-gray-700">
+                {profile.display_name || 'Партнер'}
+              </span>
+              <span className="text-gray-300 text-xs">•</span>
+              <span className="text-sm font-bold text-terra-600">
+                {profile.total_balance || 0}
+              </span>
+            </div>
+          )}
+          
+          <button 
+            onClick={signOut} 
+            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer group"
+            title="Выйти"
+          >
+            <LogOut className="w-5 h-5 group-hover:scale-105 transition-transform" />
+          </button>
+        </div>
+
+      </div>
 
       {/* Модальные окна */}
       <StoreModal isOpen={isStoreOpen} onClose={() => setIsStoreOpen(false)} />

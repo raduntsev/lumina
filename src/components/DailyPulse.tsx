@@ -20,7 +20,7 @@ interface Task {
 interface DailyMetric {
   user_id: string;
   date: string;
-  mood_score: number | null; // Теперь может быть null
+  mood_score: number | null;
   has_intimacy: boolean;
   has_conflict: boolean;
 }
@@ -80,7 +80,7 @@ export function DailyPulse() {
   const [newSetTitle, setNewSetTitle] = useState('');
   const [newSetTasks, setNewSetTasks] = useState<TemplateTask[]>([{ content: '', points: 1 }]);
 
-  // Метрики (Настроение теперь может быть null для бесцветных дней)
+  // Метрики
   const [myMood, setMyMood] = useState<number | null>(null);
   const [myIntimacy, setMyIntimacy] = useState(false);
   const [myConflict, setMyConflict] = useState(false);
@@ -117,7 +117,7 @@ export function DailyPulse() {
               singles.push(item);
             }
           } catch {
-            singles.push(item); // Старые шаблоны (просто текст)
+            singles.push(item);
           }
         });
         
@@ -178,12 +178,12 @@ export function DailyPulse() {
     }
   }, [currentMonth, spaceId, currentUserId, isAuthLoading, inviteCode, days]);
 
+  // Запуск только после полной инициализации
   useEffect(() => {
-  // Важно: ждем пока загрузится авторизация И появится spaceId
-  if (!isAuthLoading && spaceId) {
-    fetchMonthActivity();
-  }
-}, [fetchMonthActivity, isAuthLoading, spaceId]);
+    if (!isAuthLoading && spaceId) {
+      fetchMonthActivity();
+    }
+  }, [fetchMonthActivity, isAuthLoading, spaceId]);
 
   useEffect(() => {
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -196,7 +196,6 @@ export function DailyPulse() {
     }
   }, [selectedDate, monthData, currentUserId]);
 
-  // Обновлен для работы с null
   const saveMetrics = async (val: number | null, intim: boolean, conf: boolean) => {
     if (!spaceId || !currentUserId) return;
     await supabase.from('daily_metrics').upsert({
@@ -225,10 +224,15 @@ export function DailyPulse() {
     await supabase.from('checklist_items').update({ is_completed: !currentCompleted }).eq('id', taskId);
   };
 
+  // Оптимизированное массовое подтверждение
   const handleReviewDay = async () => {
     const tasksToConfirm = partnerTasks.filter(t => t.is_ready && !t.is_completed);
+    if (tasksToConfirm.length === 0) return;
+
     setTasksByDate(prev => ({ ...prev, [selectedDateStr]: prev[selectedDateStr].map(t => (t.is_ready && !t.is_completed && t.author_id === currentUserId) ? { ...t, is_completed: true } : t) }));
-    await Promise.all(tasksToConfirm.map(t => supabase.from('checklist_items').update({ is_completed: true }).eq('id', t.id)));
+    
+    const taskIds = tasksToConfirm.map(t => t.id);
+    await supabase.from('checklist_items').update({ is_completed: true }).in('id', taskIds);
   };
 
   const addTaskToDatabase = async (taskText: string, taskPoints: number) => {
@@ -246,6 +250,34 @@ export function DailyPulse() {
     }
   };
 
+  // Оптимизированная вставка набора задач
+  const addMultipleTasksToDatabase = async (tasksToAdd: {content: string, points: number}[]) => {
+    if (!spaceId || !currentUserId || !partnerId) {
+      if (!partnerId) alert("Партнер еще не присоединился!");
+      return;
+    }
+
+    let { data: checklist } = await supabase.from('checklists').select('id').eq('space_id', spaceId).eq('date', selectedDateStr).maybeSingle();
+    if (!checklist) {
+      const { data: nC } = await supabase.from('checklists').insert({ space_id: spaceId, user_id: currentUserId, target_user_id: partnerId, date: selectedDateStr }).select('id').single();
+      checklist = nC;
+    }
+
+    if (checklist) {
+      const itemsToInsert = tasksToAdd.map((task, index) => ({
+        checklist_id: checklist.id,
+        space_id: spaceId,
+        user_id: currentUserId,
+        content: task.content,
+        points: task.points,
+        sort_order: allCurrentTasks.length + index,
+        is_ready: false,
+        is_completed: false
+      }));
+      await supabase.from('checklist_items').insert(itemsToInsert);
+    }
+  };
+
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskText.trim()) return;
@@ -254,7 +286,6 @@ export function DailyPulse() {
     setNewTaskText(''); setNewTaskPoints(1); setIsAddingTask(false);
   };
 
-  // --- ЛОГИКА ШАБЛОНОВ И НАБОРОВ ---
   const handleSaveTemplate = async () => {
     if (!newTaskText.trim() || !spaceId || !currentUserId) return;
     const { data } = await supabase.from('task_templates').insert({
@@ -282,7 +313,7 @@ export function DailyPulse() {
   };
 
   const handleUseTemplateSet = async (set: TemplateSet) => {
-    for (const task of set.tasks) { await addTaskToDatabase(task.content, task.points); }
+    await addMultipleTasksToDatabase(set.tasks);
     fetchMonthActivity();
     setIsAddingTask(false);
   };
@@ -312,7 +343,7 @@ export function DailyPulse() {
     const partnerOpacity = partnerScore !== null ? (partnerScore / 10) * 0.8 : 0;
 
     const myColor = `rgba(230, 57, 70, ${myOpacity})`;
-    const partnerColor = `rgba(17, 24, 39, ${partnerOpacity})`; // gray-900
+    const partnerColor = `rgba(17, 24, 39, ${partnerOpacity})`; 
 
     if (viewMode === 'my') return { backgroundColor: myMetric && myScore !== null ? myColor : 'transparent' };
     if (viewMode === 'partner') return { backgroundColor: partnerMetric && partnerScore !== null ? partnerColor : 'transparent' };
@@ -450,7 +481,6 @@ export function DailyPulse() {
               <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
                 <p className="text-sm font-medium text-gray-500 mb-5">Твоё настроение</p>
                 <div className="flex items-center gap-5 mb-6">
-                  {/* Показываем прочерк, если null */}
                   <span className="text-4xl font-bold text-gray-900 w-10 text-center">
                     {myMood !== null ? myMood : '-'}
                   </span>
@@ -458,7 +488,7 @@ export function DailyPulse() {
                     type="range" 
                     min="1" 
                     max="10" 
-                    value={myMood || 5} // Если null, ставим ползунок посередине
+                    value={myMood || 5} 
                     onChange={(e) => { 
                       const val = Number(e.target.value);
                       setMyMood(val); 
@@ -466,7 +496,6 @@ export function DailyPulse() {
                     }} 
                     className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-terra-500" 
                   />
-                  {/* Кнопка очистки (крестик) */}
                   {myMood !== null && (
                     <button 
                       onClick={() => {
@@ -482,21 +511,20 @@ export function DailyPulse() {
                 </div>
                 <div className="flex gap-4">
                   <div className="relative group">
-  <button 
-    onClick={() => { setMyIntimacy(!myIntimacy); saveMetrics(myMood, !myIntimacy, myConflict); }} 
-    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
-      myIntimacy 
-        ? 'bg-white border-2 border-terra-500 text-terra-500 shadow-md' 
-        : 'bg-white border border-gray-200 text-gray-400 hover:border-terra-300 hover:text-terra-500'
-    }`}
-  >
-    {/* Добавили fill-terra-500 для заливки сердца */}
-    <Heart className={`w-5 h-5 ${myIntimacy ? 'fill-terra-500' : ''}`} />
-  </button>
-  <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-    Близость
-  </span>
-</div>
+                    <button 
+                      onClick={() => { setMyIntimacy(!myIntimacy); saveMetrics(myMood, !myIntimacy, myConflict); }} 
+                      className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
+                        myIntimacy 
+                          ? 'bg-white border-2 border-terra-500 text-terra-500 shadow-md' 
+                          : 'bg-white border border-gray-200 text-gray-400 hover:border-terra-300 hover:text-terra-500'
+                      }`}
+                    >
+                      <Heart className={`w-5 h-5 ${myIntimacy ? 'fill-terra-500' : ''}`} />
+                    </button>
+                    <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                      Близость
+                    </span>
+                  </div>
                   <div className="relative group">
                     <button onClick={() => { setMyConflict(!myConflict); saveMetrics(myMood, myIntimacy, !myConflict); }} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${myConflict ? 'bg-gray-900 text-white shadow-md' : 'bg-white border border-gray-200 text-gray-400 hover:border-gray-900 hover:text-gray-900'}`}><Zap className="w-5 h-5" /></button>
                     <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">Конфликт</span>
