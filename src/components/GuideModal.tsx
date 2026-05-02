@@ -131,7 +131,7 @@ export function GuideModal({ isOpen, onClose }: GuideModalProps) {
           <div className="flex items-center justify-between p-6 pb-0">
             <div className="flex gap-1.5">
               {slides.map((_, idx) => (
-                <div key={idx} className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentSlide ? 'w-6 bg-terra-500' : 'w-2 bg-gray-200'}`} />
+                <div key={idx} className={`h-2 rounded-full transition-all duration-300 ${idx === currentSlide ? 'w-8 bg-gray-900' : 'w-2 bg-gray-200'}`} />
               ))}
             </div>
             <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 rounded-full transition-colors cursor-pointer">

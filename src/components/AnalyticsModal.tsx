@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Activity, Battery, AlertCircle, Info, Loader2 } from 'lucide-react';
+import { X, Activity, AlertCircle, Info, Loader2 } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ComposedChart } from 'recharts';
 import supabase from '@/lib/supabase';
 import { useSpaceAuth } from '@/hooks/useSpaceAuth';
@@ -22,13 +22,11 @@ const getDaysArray = (days: number) => {
 };
 
 export function AnalyticsModal({ isOpen, onClose }: AnalyticsModalProps) {
-  const { spaceId, user, profile } = useSpaceAuth();
+  const { spaceId, user } = useSpaceAuth();
   const currentUserId = user?.id;
 
   const [isLoading, setIsLoading] = useState(true);
   const [rawData, setRawData] = useState<{ items: any[], pulses: any[] }>({ items: [], pulses: [] });
-  const [myEnergyToday, setMyEnergyToday] = useState<number | null>(null);
-  const [isSavingEnergy, setIsSavingEnergy] = useState(false);
 
   const fetchAnalytics = useCallback(async () => {
     if (!spaceId || !currentUserId) return;
@@ -39,7 +37,6 @@ export function AnalyticsModal({ isOpen, onClose }: AnalyticsModalProps) {
     const startDateStr = fourteenDaysAgo.toISOString();
 
     try {
-      // Ровно 2 запроса, чтобы не грузить базу
       const [itemsRes, pulsesRes] = await Promise.all([
         supabase.from('checklist_items')
           .select('completed_at, points, user_id')
@@ -57,11 +54,6 @@ export function AnalyticsModal({ isOpen, onClose }: AnalyticsModalProps) {
         pulses: pulsesRes.data || []
       });
 
-      // Проверяем, ставил ли я оценку сегодня
-      const todayStr = new Date().toISOString().split('T')[0];
-      const myTodayPulse = (pulsesRes.data || []).find(p => p.user_id === currentUserId && p.record_date === todayStr);
-      if (myTodayPulse) setMyEnergyToday(myTodayPulse.energy);
-
     } catch (err) {
       console.error(err);
     } finally {
@@ -73,43 +65,19 @@ export function AnalyticsModal({ isOpen, onClose }: AnalyticsModalProps) {
     if (isOpen) fetchAnalytics();
   }, [isOpen, fetchAnalytics]);
 
-  const handleSaveEnergy = async (val: number) => {
-    if (!spaceId || !currentUserId) return;
-    setIsSavingEnergy(true);
-    const todayStr = new Date().toISOString().split('T')[0];
-
-    const { error } = await supabase.from('daily_pulse').upsert({
-      space_id: spaceId,
-      user_id: currentUserId,
-      record_date: todayStr,
-      energy: val
-    }, { onConflict: 'user_id, record_date' });
-
-    if (!error) {
-      setMyEnergyToday(val);
-      fetchAnalytics(); // Тихо обновляем графики
-    }
-    setIsSavingEnergy(false);
-  };
-
   // Собираем данные для графиков (клиентская агрегация)
   const chartData = useMemo(() => {
     if (!currentUserId) return [];
     const days = getDaysArray(14);
     
     return days.map(dateStr => {
-      // Форматируем дату для подписи (например, "15 мая")
       const dateObj = new Date(dateStr);
       const displayDate = dateObj.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 
       // Задачи за этот день
       const dayItems = rawData.items.filter(item => item.completed_at?.startsWith(dateStr));
-      const myPoints = dayItems.filter(i => i.user_id !== currentUserId).reduce((sum, i) => sum + (i.points || 0), 0); // баллы, которые я заработал (партнер выполнил)
-      // Поправка логики: если я выполнил задачу, я получаю баллы. Значит user_id в checklist_items — это тот, кто СОЗДАЛ или ВЫПОЛНИЛ? 
-      // В LuminaPulse обычно тот, кто отмечает задачу, зарабатывает баллы. Предположим, что мы считаем баллы по факту выполнения.
-      // Для простоты в этом коде: myPoints = сумма моих усилий.
       
-      // Считаем усилия
+      // Считаем усилия (кто сколько баллов заработал/выполнил)
       const myEffort = dayItems.filter(i => i.user_id === currentUserId).reduce((sum, i) => sum + (i.points || 0), 0);
       const partnerEffort = dayItems.filter(i => i.user_id !== currentUserId).reduce((sum, i) => sum + (i.points || 0), 0);
 
@@ -191,7 +159,7 @@ export function AnalyticsModal({ isOpen, onClose }: AnalyticsModalProps) {
                 <p className="text-sm font-medium text-gray-500">Аналитика за 14 дней</p>
               </div>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400">
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 cursor-pointer">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -199,28 +167,6 @@ export function AnalyticsModal({ isOpen, onClose }: AnalyticsModalProps) {
           {/* Content */}
           <div className="flex-grow overflow-y-auto p-4 sm:p-8 space-y-8">
             
-            {/* Оценка настроения (сегодня) */}
-            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h3 className="font-semibold text-gray-900 flex items-center gap-2"><Battery className="w-4 h-4 text-terra-500"/> Ваш уровень энергии сегодня</h3>
-                  <p className="text-sm text-gray-500 mt-1">От 1 (совсем нет сил) до 10 (горы сверну).</p>
-                </div>
-                <div className="flex gap-1.5 flex-wrap">
-                  {[2, 4, 6, 8, 10].map((val) => (
-                    <button
-                      key={val}
-                      onClick={() => handleSaveEnergy(val)}
-                      disabled={isSavingEnergy}
-                      className={`w-10 h-10 rounded-xl text-sm font-semibold transition-all ${myEnergyToday === val ? 'bg-terra-500 text-white shadow-md' : 'bg-gray-50 text-gray-600 border border-gray-200 hover:border-terra-300'}`}
-                    >
-                      {val}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
             {isLoading ? (
               <div className="py-20 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-300" /></div>
             ) : (
@@ -229,7 +175,7 @@ export function AnalyticsModal({ isOpen, onClose }: AnalyticsModalProps) {
                 {insights.length > 0 && (
                   <div className="space-y-3">
                     {insights.map((msg, i) => (
-                      <div key={i} className={`p-4 rounded-xl border flex gap-3 text-sm leading-relaxed ${msg.type === 'alert' ? 'bg-red-50 border-red-100 text-red-800' : 'bg-blue-50 border-blue-100 text-blue-800'}`}>
+                      <div key={i} className={`p-4 rounded-xl border flex gap-3 text-sm leading-relaxed shadow-sm ${msg.type === 'alert' ? 'bg-red-50 border-red-100 text-red-800' : 'bg-blue-50 border-blue-100 text-blue-800'}`}>
                         {msg.type === 'alert' ? <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" /> : <Info className="w-5 h-5 shrink-0 mt-0.5" />}
                         <p>{msg.text}</p>
                       </div>
