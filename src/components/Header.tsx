@@ -6,7 +6,7 @@ import { LettersModal } from './LettersModal';
 import supabase from '@/lib/supabase';
 import { useSpaceAuth } from '@/hooks/useSpaceAuth';
 import { SettingsModal } from './SettingsModal';
-import { GuideModal } from './GuideModal'; // <-- НОВОЕ
+import { GuideModal } from './GuideModal'; 
 import { Store, Mail, LogOut, Settings, BookHeart } from 'lucide-react';
 
 export function Header() {
@@ -26,12 +26,14 @@ export function Header() {
     }, 1000);
     return () => clearTimeout(timer);
   }, []);
+  
   const [isLettersOpen, setIsLettersOpen] = useState(false);
   const { spaceId, user, profile, signOut } = useSpaceAuth();
   
   const [unreadLettersCount, setUnreadLettersCount] = useState(0);
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [realBalance, setRealBalance] = useState<number>(0);
+  const [partnerBalance, setPartnerBalance] = useState<number>(0); // <-- Состояние для баланса партнера
 
   useEffect(() => {
     if (!spaceId || !user?.id) return;
@@ -57,12 +59,32 @@ export function Header() {
     };
 
     const fetchBalance = async () => {
-      const { data, error } = await supabase.rpc('get_real_balance', { 
+      // 1. Получаем свой баланс
+      const { data: myData, error: myError } = await supabase.rpc('get_real_balance', { 
         usr_id: user.id, 
         spc_id: spaceId 
       });
-      if (!error && data !== null) {
-        setRealBalance(data);
+      if (!myError && myData !== null) {
+        setRealBalance(myData);
+      }
+
+      // 2. Ищем ID партнера и получаем его баланс
+      const { data: partnerData } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('space_id', spaceId)
+        .neq('id', user.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (partnerData) {
+        const { data: pData, error: pError } = await supabase.rpc('get_real_balance', { 
+          usr_id: partnerData.id, 
+          spc_id: spaceId 
+        });
+        if (!pError && pData !== null) {
+          setPartnerBalance(pData);
+        }
       }
     };
 
@@ -123,14 +145,25 @@ export function Header() {
 
         <div className="flex items-center gap-1 sm:gap-3">
           {profile && (
-            <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg cursor-default">
-              <span className="hidden sm:block text-sm font-medium text-gray-700">{profile.display_name || 'Партнер'}</span>
-              <span className="hidden sm:block text-gray-300 text-xs">•</span>
-              <span className="text-sm font-bold text-terra-600">{realBalance}</span>
+            <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-4 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl cursor-default">
+              {/* Твой баланс */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-tight">Вы:</span>
+                <span className="text-sm font-bold text-terra-600">{realBalance}</span>
+              </div>
+
+              {/* Разделитель только для десктопа */}
+              <div className="hidden sm:block w-px h-3 bg-gray-300" />
+
+              {/* Баланс партнера */}
+              <div className="flex items-center gap-1.5 opacity-70">
+                <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-tight">Партнер:</span>
+                <span className="text-sm font-bold text-gray-600">{partnerBalance}</span>
+              </div>
             </div>
           )}
           
-          {/* НОВАЯ КНОПКА: Справочник / Гайд */}
+          {/* Справочник / Гайд */}
           <button onClick={() => setIsGuideOpen(true)} className="p-2 text-gray-400 hover:text-terra-600 hover:bg-terra-50 rounded-xl transition-all cursor-pointer group" title="Как пользоваться приложением">
             <BookHeart className="w-5 h-5" />
           </button>

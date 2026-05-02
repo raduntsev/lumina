@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ChevronRight, ChevronLeft, Heart, Target, Store, Mail, Users, Copy, Check } from 'lucide-react';
+import { X, ChevronRight, Heart, Target, Store, Mail, Users, Copy, Check } from 'lucide-react';
 import supabase from '@/lib/supabase';
 import { useSpaceAuth } from '@/hooks/useSpaceAuth';
 
@@ -17,7 +17,6 @@ export function GuideModal({ isOpen, onClose }: GuideModalProps) {
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
 
-  // Подтягиваем инвайт-код для последнего слайда
   useEffect(() => {
     if (isOpen && spaceId && !inviteCode) {
       supabase.from('spaces').select('invite_code').eq('id', spaceId).single()
@@ -39,71 +38,69 @@ export function GuideModal({ isOpen, onClose }: GuideModalProps) {
     {
       icon: Heart,
       title: 'Добро пожаловать',
-      subtitle: 'Цифровая инфраструктура ваших отношений',
       content: (
         <div className="space-y-4 text-gray-600 text-sm leading-relaxed">
-          <p>Бытовая рутина — главный убийца романтики. Социология называет это «невидимым трудом»: мы замечаем грязную посуду, но редко замечаем того, кто её помыл.</p>
-          <p>LuminaPulse создан, чтобы сделать этот труд видимым. Это не таблица штрафов, это система позитивного подкрепления. Здесь рутина превращается в игру, а любая помощь конвертируется во внимание.</p>
+          <p>LuminaPulse — это ваше личное пространство для двоих. Мы создали это приложение, чтобы помочь вам легко организовывать общие дела, чаще замечать заботу друг друга и просто быть на связи в своем уютном уголке, вдали от шумных мессенджеров.</p>
+          <p>Здесь вы можете вместе планировать день, радовать друг друга наградами за выполненные задачи и оставлять теплые послания.</p>
         </div>
       )
     },
     {
       icon: Target,
-      title: 'Экономика заботы',
-      subtitle: 'Задачи и Баллы',
+      title: 'Вы получаете баллы',
       content: (
         <div className="space-y-4 text-gray-600 text-sm leading-relaxed">
-          <p>Вы создаете чеклисты друг для друга. Психологический смысл — сместить фокус с претензий <em>(«ты опять не убрал»)</em> на запрос и вознаграждение <em>(«сделай это, и ты получишь профит»)</em>.</p>
-          <ul className="list-disc pl-5 space-y-2 text-gray-700 font-medium">
-            <li><strong>Будьте конкретны:</strong> Не «Будь молодцом», а «Завари мне кофе утром».</li>
-            <li><strong>Оценивайте усилия:</strong> Вынести мусор = 10 баллов. Позвонить в ЖЭК = 50 баллов.</li>
-            <li><strong>Создавайте наборы:</strong> Например, набор «Подготовка ко сну» (проветрить, расстелить кровать) — 30 баллов.</li>
-          </ul>
+          <p>Вы можете создавать друг для друга списки дел. Выполнение каждой задачи приносит баллы. Это превращает обычные дела в легкую игру и помогает видеть, сколько сил каждый вкладывает в ваш общий быт.</p>
+          
+          <div className="bg-terra-50 p-4 sm:p-5 rounded-2xl border border-terra-100 space-y-3">
+            <p className="font-semibold text-terra-800 text-xs mb-1">Как ставить задачи:</p>
+            <p>🎯 <strong>Ясные просьбы:</strong> Вместо абстрактного «помоги по дому», лучше написать «Завари мне кофе утром».</p>
+            <p>⚖️ <strong>Ценность усилий:</strong> Вынести мусор — 10 баллов. Разобраться с документами — 50 баллов.</p>
+            <p>📦 <strong>Удобные наборы:</strong> Объединяйте мелкие дела. Например, «Уборка перед сном» (проветрить, расстелить кровать) — 30 баллов.</p>
+          </div>
         </div>
       )
     },
     {
       icon: Store,
       title: 'Магазин наград',
-      subtitle: 'Легализация отдыха без чувства вины',
       content: (
         <div className="space-y-4 text-gray-600 text-sm leading-relaxed">
-          <p>Заработанные баллы — это ваша внутренняя валюта. Партнер выставляет «товары», а вы их покупаете.</p>
-          <div className="bg-terra-50 p-4 rounded-xl border border-terra-100 space-y-2">
-            <p className="font-semibold text-terra-800 text-xs uppercase tracking-wider mb-2">Что можно продавать:</p>
-            <p>💆‍♂️ <strong>Услуги:</strong> Массаж спины 15 минут (100 б.)</p>
-            <p>🛡️ <strong>Иммунитеты:</strong> Освобождение от посуды на день (200 б.)</p>
-            <p>🍿 <strong>Досуг:</strong> Выбор фильма на вечер без споров (50 б.)</p>
+          <p>Заработанные баллы можно тратить в Магазине. Вы добавляете приятные награды, а партнер покупает их за свои баллы. Это отличный способ порадовать друг друга и легализовать право на отдых.</p>
+          
+          <div className="bg-terra-50 p-4 sm:p-5 rounded-2xl border border-terra-100 space-y-3">
+            <p className="font-semibold text-terra-800 text-xs mb-1">Идеи для наград:</p>
+            <p>💆‍♂️ <strong>Услуги:</strong> Массаж спины на 15 минут (100 баллов)</p>
+            <p>🛡️ <strong>Отдых:</strong> Освобождение от мытья посуды на день (200 баллов)</p>
+            <p>🍿 <strong>Досуг:</strong> Право выбрать фильм на вечер (50 баллов)</p>
           </div>
-          <p className="text-xs text-gray-500 mt-2">Важно: Не продавайте базовое уважение. Магазин должен состоять только из бонусов и удовольствий.</p>
+          <p className="text-xs text-gray-500 mt-2">Старайтесь добавлять в магазин то, что действительно приносит радость и удовольствие.</p>
         </div>
       )
     },
     {
       icon: Mail,
-      title: 'Пульс и Письма',
-      subtitle: 'Асинхронная коммуникация',
+      title: 'Письма',
       content: (
         <div className="space-y-4 text-gray-600 text-sm leading-relaxed">
-          <p><strong>Настроение:</strong> Отмечайте свой уровень энергии каждый день. Если партнер поставил «настроение 2 из 10» — это сигнал снизить ожидания. Это лучшая профилактика конфликтов.</p>
-          <p><strong>Письма:</strong> Чаты обесценивают текст. Письма созданы для вдумчивости. Делитесь фото, записывайте аудио. Это цифровой аналог письма в конверте — его читают, когда есть ресурс, что снижает тревожность от ожидания мгновенного ответа.</p>
+          <p><strong>Настроение:</strong> Вы можете отмечать свой уровень энергии каждый день. Это поможет партнеру понять ваше состояние — когда нужна поддержка, а когда лучше дать время на отдых.</p>
+          <p><strong>Письма:</strong> Вместо привычных быстрых сообщений мы сделали полноценную почту. Вы можете прикрепить фото, записать голосовое или написать длинный текст. Письмо никуда не убежит в ленте, и партнер прочитает его, когда ему будет удобно. Это спокойный и красивый способ делиться важным.</p>
         </div>
       )
     },
     {
       icon: Users,
       title: 'Следующий шаг',
-      subtitle: 'Пригласите партнера',
       content: (
         <div className="space-y-6 text-gray-600 text-sm leading-relaxed flex flex-col items-center text-center mt-4">
-          <p>Пространство работает только для двоих. Прямо сейчас система ждет вашего партнера. Отправьте ему уникальный код приглашения.</p>
+          <p>Пространство работает только для двоих. Прямо сейчас система ждет вашего партнера. Отправьте ему код приглашения.</p>
           
           {inviteCode ? (
             <button 
               onClick={handleCopyCode}
               className="group flex flex-col items-center gap-2 p-6 w-full max-w-sm bg-gray-50 hover:bg-gray-100 border-2 border-dashed border-gray-200 hover:border-terra-300 rounded-2xl transition-all cursor-pointer"
             >
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Ваш код</span>
+              <span className="text-xs font-semibold text-gray-500">Ваш код</span>
               <span className="text-3xl font-bold text-gray-900 tracking-widest">{inviteCode}</span>
               <div className={`flex items-center gap-1.5 mt-2 text-sm font-medium ${isCopied ? 'text-green-500' : 'text-terra-600 group-hover:text-terra-700'}`}>
                 {isCopied ? <><Check className="w-4 h-4" /> Скопировано</> : <><Copy className="w-4 h-4" /> Нажмите, чтобы скопировать</>}
@@ -113,7 +110,7 @@ export function GuideModal({ isOpen, onClose }: GuideModalProps) {
             <div className="animate-pulse w-full max-w-sm h-32 bg-gray-100 rounded-2xl" />
           )}
 
-          <p className="text-xs text-gray-400">Как только код будет активирован, ваши профили синхронизируются.</p>
+          <p className="text-xs text-gray-400">Как только код будет активирован, ваши профили соединятся, и вы сможете начать.</p>
         </div>
       )
     }
@@ -154,8 +151,7 @@ export function GuideModal({ isOpen, onClose }: GuideModalProps) {
                 className="flex-1 flex flex-col"
               >
                 {React.createElement(slides[currentSlide].icon, { className: "w-10 h-10 text-terra-500 mb-6" })}
-                <h2 className="text-2xl font-bold text-gray-900 mb-1">{slides[currentSlide].title}</h2>
-                <h3 className="text-sm font-medium text-terra-600 mb-6">{slides[currentSlide].subtitle}</h3>
+                <h2 className="text-2xl font-bold text-gray-900 mb-6">{slides[currentSlide].title}</h2>
                 <div className="flex-1">
                   {slides[currentSlide].content}
                 </div>
