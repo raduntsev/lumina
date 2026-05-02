@@ -43,9 +43,9 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [requests, setRequests] = useState<ShopRequest[]>([]);
   const [balance, setBalance] = useState<number>(0);
+  const [partnerBalance, setPartnerBalance] = useState<number>(0); // <-- Состояние для баланса партнера
   const [isLoading, setIsLoading] = useState(true);
   
-  // Добавлен стейт для лимита истории
   const [historyLimit, setHistoryLimit] = useState(5);
 
   // Формы
@@ -59,6 +59,7 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
     setIsLoading(true);
 
     try {
+      // 1. Грузим товары, историю и запросы
       const { data: shopData } = await supabase.from('shop_items').select('*').eq('space_id', spaceId).order('created_at', { ascending: false });
       if (shopData) setItems(shopData);
 
@@ -68,22 +69,22 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
       const { data: reqData } = await supabase.from('shop_requests').select('*').eq('space_id', spaceId).order('created_at', { ascending: false });
       if (reqData) setRequests(reqData);
 
-      const { data: spaceChecklists } = await supabase.from('checklists').select('id').eq('space_id', spaceId);
-      const checklistIds = spaceChecklists?.map(c => c.id) || [];
+      // 2. Получаем свой точный баланс через функцию
+      const { data: myData } = await supabase.rpc('get_real_balance', { 
+        usr_id: currentUserId, 
+        spc_id: spaceId 
+      });
+      if (myData !== null) setBalance(myData);
 
-      let totalEarned = 0;
-      if (checklistIds.length > 0) {
-        const { data: earnedData } = await supabase
-          .from('checklist_items')
-          .select('points')
-          .in('checklist_id', checklistIds)
-          .eq('is_completed', true)
-          .neq('user_id', currentUserId);
-        totalEarned = earnedData?.reduce((sum, item) => sum + (item.points || 0), 0) || 0;
+      // 3. Ищем партнера и получаем его баланс
+      const { data: partnerData } = await supabase.from('profiles').select('id').eq('space_id', spaceId).neq('id', currentUserId).limit(1).maybeSingle();
+      if (partnerData) {
+        const { data: pData } = await supabase.rpc('get_real_balance', { 
+          usr_id: partnerData.id, 
+          spc_id: spaceId 
+        });
+        if (pData !== null) setPartnerBalance(pData);
       }
-
-      const totalSpent = historyData?.filter(p => p.buyer_id === currentUserId).reduce((sum, item) => sum + (item.cost || 0), 0) || 0;
-      setBalance(totalEarned - totalSpent);
 
     } catch (err) {
       console.error("Ошибка загрузки:", err);
@@ -95,7 +96,7 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
   useEffect(() => {
     if (isOpen) {
       fetchData();
-      setHistoryLimit(5); // Сбрасываем лимит при открытии
+      setHistoryLimit(5); 
     }
   }, [isOpen, fetchData]);
 
@@ -132,13 +133,20 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
     if (balance < item.cost) { alert('Недостаточно баллов!'); return; }
 
     if (window.confirm(`Потратить ${item.cost} баллов на "${item.title}"?`)) {
-      const { data } = await supabase.from('shop_purchases').insert({
+      const { data, error } = await supabase.from('shop_purchases').insert({
         space_id: spaceId, item_id: item.id, buyer_id: currentUserId, seller_id: item.creator_id, cost: item.cost, title: item.title
       }).select('*').single();
+
+      if (error) {
+        alert('Не удалось совершить покупку. Возможно, баланс изменился.');
+        fetchData();
+        return;
+      }
 
       if (data) {
         setPurchases([data, ...purchases]);
         setBalance(prev => prev - item.cost);
+        setPartnerBalance(prev => prev + item.cost); // Оптимистично пополняем баланс партнера у нас на экране
         setActiveTab('history');
       }
     }
@@ -205,12 +213,21 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                   <p className="text-sm font-medium text-gray-500">Обмен усилиями</p>
                 </div>
               </div>
-              <div className="flex items-center gap-6 w-full sm:w-auto justify-between sm:justify-end">
-                <div className="flex items-center gap-3 bg-gray-50 px-4 py-2 rounded-xl border border-gray-100">
-                  <span className="text-sm font-medium text-gray-500">Ваш баланс:</span>
-                  <span className="text-xl font-semibold text-terra-600">{balance} <span className="text-sm text-terra-500/70 font-medium">баллов</span></span>
+              
+              <div className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto justify-between sm:justify-end">
+                {/* БЛОК С БАЛАНСАМИ ОБИХ ПАРТНЕРОВ */}
+                <div className="flex items-center gap-3 sm:gap-4 bg-gray-50 px-4 py-2 rounded-xl border border-gray-100">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-tight">Вы:</span>
+                    <span className="text-lg sm:text-xl font-bold text-terra-600">{balance}</span>
+                  </div>
+                  <div className="w-px h-5 bg-gray-200" />
+                  <div className="flex items-center gap-1.5 opacity-70">
+                    <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-tight">Партнер:</span>
+                    <span className="text-lg sm:text-xl font-bold text-gray-600">{partnerBalance}</span>
+                  </div>
                 </div>
-                {/* Убран класс hidden sm:block, чтобы крестик был виден всегда */}
+                
                 <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors cursor-pointer text-gray-400 hover:text-gray-900">
                   <X className="w-5 h-5" />
                 </button>

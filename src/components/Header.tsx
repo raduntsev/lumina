@@ -148,18 +148,9 @@ export function Header() {
             <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-4 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl cursor-default">
               {/* Твой баланс */}
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-tight">Вы:</span>
                 <span className="text-sm font-bold text-terra-600">{realBalance}</span>
               </div>
 
-              {/* Разделитель только для десктопа */}
-              <div className="hidden sm:block w-px h-3 bg-gray-300" />
-
-              {/* Баланс партнера */}
-              <div className="flex items-center gap-1.5 opacity-70">
-                <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-tight">Партнер:</span>
-                <span className="text-sm font-bold text-gray-600">{partnerBalance}</span>
-              </div>
             </div>
           )}
           
