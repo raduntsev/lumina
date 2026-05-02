@@ -6,11 +6,26 @@ import { LettersModal } from './LettersModal';
 import supabase from '@/lib/supabase';
 import { useSpaceAuth } from '@/hooks/useSpaceAuth';
 import { SettingsModal } from './SettingsModal';
-import { Store, Mail, LogOut, Settings } from 'lucide-react';
+import { GuideModal } from './GuideModal'; // <-- НОВОЕ
+import { Store, Mail, LogOut, Settings, BookHeart } from 'lucide-react';
 
 export function Header() {
   const [isStoreOpen, setIsStoreOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+
+  // Проверка на первый вход
+  useEffect(() => {
+    // Ждем секунду после загрузки, чтобы UI успел отрисоваться
+    const timer = setTimeout(() => {
+      const hasSeenGuide = localStorage.getItem('lumina_guide_seen');
+      if (!hasSeenGuide) {
+        setIsGuideOpen(true);
+        localStorage.setItem('lumina_guide_seen', 'true');
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
   const [isLettersOpen, setIsLettersOpen] = useState(false);
   const { spaceId, user, profile, signOut } = useSpaceAuth();
   
@@ -107,7 +122,6 @@ export function Header() {
         <div className="w-px h-6 bg-gray-200 hidden md:block" />
 
         <div className="flex items-center gap-1 sm:gap-3">
-          {/* Блок с именем и балансом (оставил только один!) */}
           {profile && (
             <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg cursor-default">
               <span className="hidden sm:block text-sm font-medium text-gray-700">{profile.display_name || 'Партнер'}</span>
@@ -116,12 +130,17 @@ export function Header() {
             </div>
           )}
           
-          {/* Кнопка настроек (выход из пространства) */}
-          <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-all cursor-pointer group" title="Настройки пространства">
+          {/* НОВАЯ КНОПКА: Справочник / Гайд */}
+          <button onClick={() => setIsGuideOpen(true)} className="p-2 text-gray-400 hover:text-terra-600 hover:bg-terra-50 rounded-xl transition-all cursor-pointer group" title="Как пользоваться приложением">
+            <BookHeart className="w-5 h-5" />
+          </button>
+
+          {/* Кнопка настроек */}
+          <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-all cursor-pointer group" title="Настройки">
             <Settings className="w-5 h-5" />
           </button>
 
-          {/* Полный выход из аккаунта (LogOut) */}
+          {/* Выход */}
           <button onClick={signOut} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer group" title="Выйти из аккаунта">
             <LogOut className="w-5 h-5" />
           </button>
@@ -130,9 +149,10 @@ export function Header() {
 
       <StoreModal isOpen={isStoreOpen} onClose={() => setIsStoreOpen(false)} />
       <LettersModal isOpen={isLettersOpen} onClose={() => setIsLettersOpen(false)} />
-      
-      {/* Наша новая модалка */}
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      
+      {/* Подключаем GuideModal */}
+      <GuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
     </header>
   );
 }
