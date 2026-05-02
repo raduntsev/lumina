@@ -8,11 +8,14 @@ import { useSpaceAuth } from '@/hooks/useSpaceAuth';
 import { SettingsModal } from './SettingsModal';
 import { GuideModal } from './GuideModal'; 
 import { Store, Mail, LogOut, Settings, BookHeart } from 'lucide-react';
+import { AnalyticsModal } from './AnalyticsModal';
+import { Activity } from 'lucide-react'; // новая иконка для шапки
 
 export function Header() {
   const [isStoreOpen, setIsStoreOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
 
   // Проверка на первый вход
   useEffect(() => {
@@ -154,6 +157,10 @@ export function Header() {
             </div>
           )}
           
+          <button onClick={() => setIsAnalyticsOpen(true)} className="p-2 text-gray-400 hover:text-terra-600 hover:bg-terra-50 rounded-xl transition-all cursor-pointer group" title="Аналитика и пульс">
+     <Activity className="w-5 h-5"/>
+   </button>
+          
           {/* Справочник / Гайд */}
           <button onClick={() => setIsGuideOpen(true)} className="p-2 text-gray-400 hover:text-terra-600 hover:bg-terra-50 rounded-xl transition-all cursor-pointer group" title="Как пользоваться приложением">
             <BookHeart className="w-5 h-5" />
@@ -174,6 +181,7 @@ export function Header() {
       <StoreModal isOpen={isStoreOpen} onClose={() => setIsStoreOpen(false)} />
       <LettersModal isOpen={isLettersOpen} onClose={() => setIsLettersOpen(false)} />
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <AnalyticsModal isOpen={isAnalyticsOpen} onClose={() => setIsAnalyticsOpen(false)} />
       
       {/* Подключаем GuideModal */}
       <GuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
