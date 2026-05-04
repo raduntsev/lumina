@@ -128,17 +128,24 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
     setItems(items.filter(i => i.id !== id));
   };
 
-  const handleBuy = async (item: ShopItem) => {
+ const handleBuy = async (item: ShopItem) => {
     if (!spaceId || !currentUserId) return;
     if (balance < item.cost) { alert('Недостаточно баллов!'); return; }
 
     if (window.confirm(`Потратить ${item.cost} баллов на "${item.title}"?`)) {
       const { data, error } = await supabase.from('shop_purchases').insert({
-        space_id: spaceId, item_id: item.id, buyer_id: currentUserId, seller_id: item.creator_id, cost: item.cost, title: item.title
+        space_id: spaceId, 
+        item_id: item.id, 
+        buyer_id: currentUserId, 
+        seller_id: item.creator_id, 
+        cost: item.cost, 
+        title: item.title
       }).select('*').single();
 
       if (error) {
-        alert('Не удалось совершить покупку. Возможно, баланс изменился.');
+        // Теперь мы точно увидим, на что ругается Supabase
+        console.error("Ошибка Supabase:", error);
+        alert(`Ошибка при покупке: ${error.message}`);
         fetchData();
         return;
       }
@@ -146,7 +153,7 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
       if (data) {
         setPurchases([data, ...purchases]);
         setBalance(prev => prev - item.cost);
-        setPartnerBalance(prev => prev + item.cost); // Оптимистично пополняем баланс партнера у нас на экране
+        setPartnerBalance(prev => prev + item.cost);
         setActiveTab('history');
       }
     }
