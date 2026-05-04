@@ -2,10 +2,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Store, Plus, CheckCircle2, Clock, Sparkles, Loader2 } from 'lucide-react';
+import { X, Store, Plus, CheckCircle2, Clock, Sparkles, Loader2, Pencil, Trash2 } from 'lucide-react';
 import supabase from '@/lib/supabase';
 import { useSpaceAuth } from '@/hooks/useSpaceAuth';
-
 
 interface ShopItem {
   id: string;
@@ -43,23 +42,28 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [requests, setRequests] = useState<ShopRequest[]>([]);
   const [balance, setBalance] = useState<number>(0);
-  const [partnerBalance, setPartnerBalance] = useState<number>(0); // <-- Состояние для баланса партнера
+  const [partnerBalance, setPartnerBalance] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   
   const [historyLimit, setHistoryLimit] = useState(5);
 
-  // Формы
+  // Формы добавления
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newCost, setNewCost] = useState(10);
   const [isRequesting, setIsRequesting] = useState(false);
+
+  // Формы редактирования
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editCost, setEditCost] = useState(10);
 
   const fetchData = useCallback(async () => {
     if (!spaceId || !currentUserId) return;
     setIsLoading(true);
 
     try {
-      // 1. Грузим товары, историю и запросы
       const { data: shopData } = await supabase.from('shop_items').select('*').eq('space_id', spaceId).order('created_at', { ascending: false });
       if (shopData) setItems(shopData);
 
@@ -69,23 +73,14 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
       const { data: reqData } = await supabase.from('shop_requests').select('*').eq('space_id', spaceId).order('created_at', { ascending: false });
       if (reqData) setRequests(reqData);
 
-      // 2. Получаем свой точный баланс через функцию
-      const { data: myData } = await supabase.rpc('get_real_balance', { 
-        usr_id: currentUserId, 
-        spc_id: spaceId 
-      });
+      const { data: myData } = await supabase.rpc('get_real_balance', { usr_id: currentUserId, spc_id: spaceId });
       if (myData !== null) setBalance(myData);
 
-      // 3. Ищем партнера и получаем его баланс
       const { data: partnerData } = await supabase.from('profiles').select('id').eq('space_id', spaceId).neq('id', currentUserId).limit(1).maybeSingle();
       if (partnerData) {
-        const { data: pData } = await supabase.rpc('get_real_balance', { 
-          usr_id: partnerData.id, 
-          spc_id: spaceId 
-        });
+        const { data: pData } = await supabase.rpc('get_real_balance', { usr_id: partnerData.id, spc_id: spaceId });
         if (pData !== null) setPartnerBalance(pData);
       }
-
     } catch (err) {
       console.error("Ошибка загрузки:", err);
     } finally {
@@ -124,11 +119,36 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
   };
 
   const handleDeleteItem = async (id: string) => {
+    if (!window.confirm('Точно удалить этот лот?')) return;
     await supabase.from('shop_items').delete().eq('id', id);
     setItems(items.filter(i => i.id !== id));
   };
 
- const handleBuy = async (item: ShopItem) => {
+  const handleStartEdit = (item: ShopItem) => {
+    setEditingItemId(item.id);
+    setEditTitle(item.title);
+    setEditDesc(item.description);
+    setEditCost(item.cost);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItemId || !editTitle.trim()) return;
+
+    const { data, error } = await supabase
+      .from('shop_items')
+      .update({ title: editTitle.trim(), description: editDesc.trim(), cost: editCost })
+      .eq('id', editingItemId)
+      .select('*')
+      .single();
+
+    if (data && !error) {
+      setItems(items.map(i => i.id === editingItemId ? data : i));
+      setEditingItemId(null);
+    }
+  };
+
+  const handleBuy = async (item: ShopItem) => {
     if (!spaceId || !currentUserId) return;
     if (balance < item.cost) { alert('Недостаточно баллов!'); return; }
 
@@ -143,7 +163,6 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
       }).select('*').single();
 
       if (error) {
-        // Теперь мы точно увидим, на что ругается Supabase
         console.error("Ошибка Supabase:", error);
         alert(`Ошибка при покупке: ${error.message}`);
         fetchData();
@@ -245,7 +264,7 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
             <div className="bg-white border-b border-gray-100 px-4 sm:px-8 py-4 shrink-0">
               <div className="flex bg-gray-100 p-1 rounded-xl">
                 <button 
-                  onClick={() => { setActiveTab('shop'); setIsRequesting(false); }} 
+                  onClick={() => { setActiveTab('shop'); setIsRequesting(false); setEditingItemId(null); }} 
                   className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer flex justify-center items-center gap-2 ${activeTab === 'shop' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                 >
                   Магазин
@@ -258,7 +277,7 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                   {requestsForMe.length > 0 && <span className="w-2 h-2 bg-terra-500 rounded-full animate-pulse" />}
                 </button>
                 <button 
-                  onClick={() => setActiveTab('history')} 
+                  onClick={() => { setActiveTab('history'); setEditingItemId(null); }} 
                   className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer flex justify-center items-center gap-2 ${activeTab === 'history' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                 >
                   Заказы
@@ -434,20 +453,44 @@ export function StoreModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                           <div className="text-center py-16 text-sm text-gray-400 border border-dashed border-gray-200 rounded-2xl bg-white">У вас пока нет активных лотов</div>
                         ) : (
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            {myItems.map(item => (
-                              <div key={item.id} className="p-6 bg-white border border-gray-200 rounded-2xl group shadow-sm flex flex-col justify-between">
-                                <div className="mb-5">
-                                  <div className="flex items-start justify-between gap-4 mb-2">
-                                    <h4 className="font-semibold text-base text-gray-900 leading-tight">{item.title}</h4>
-                                    <button onClick={() => handleDeleteItem(item.id)} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:bg-red-50 hover:text-red-500 p-1.5 rounded-lg transition-all cursor-pointer">
-                                      <X className="w-4 h-4" />
-                                    </button>
+                            {myItems.map(item => {
+                              if (editingItemId === item.id) {
+                                return (
+                                  <form key={item.id} onSubmit={handleSaveEdit} className="p-5 bg-white border-2 border-terra-300 rounded-2xl shadow-sm flex flex-col gap-3">
+                                    <input type="text" value={editTitle} onChange={e => setEditTitle(e.target.value)} required className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-terra-500 font-semibold" placeholder="Название" />
+                                    <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-terra-500 resize-none h-16" placeholder="Описание..." />
+                                    <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg px-2">
+                                      <span className="text-gray-400 text-xs font-medium pl-1">+</span>
+                                      <input type="number" min="1" value={editCost} onChange={e => setEditCost(Number(e.target.value))} required className="w-full py-1.5 text-base text-terra-600 font-bold bg-transparent outline-none text-center" />
+                                    </div>
+                                    <div className="flex gap-2 pt-2 border-t border-gray-100">
+                                      <button type="button" onClick={() => setEditingItemId(null)} className="flex-1 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer">Отмена</button>
+                                      <button type="submit" className="flex-1 py-2 text-sm bg-gray-900 text-white hover:bg-black rounded-lg transition-colors cursor-pointer font-medium">Сохранить</button>
+                                    </div>
+                                  </form>
+                                );
+                              }
+
+                              return (
+                                <div key={item.id} className="p-6 bg-white border border-gray-200 rounded-2xl group shadow-sm flex flex-col justify-between">
+                                  <div className="mb-5">
+                                    <div className="flex items-start justify-between gap-4 mb-2">
+                                      <h4 className="font-semibold text-base text-gray-900 leading-tight">{item.title}</h4>
+                                      <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => handleStartEdit(item)} className="p-1.5 text-gray-400 hover:bg-terra-50 hover:text-terra-600 rounded-lg transition-colors cursor-pointer">
+                                          <Pencil className="w-4 h-4" />
+                                        </button>
+                                        <button onClick={() => handleDeleteItem(item.id)} className="p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors cursor-pointer">
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                    {item.description && <p className="text-sm text-gray-500 leading-relaxed">{item.description}</p>}
                                   </div>
-                                  {item.description && <p className="text-sm text-gray-500 leading-relaxed">{item.description}</p>}
+                                  <span className="text-sm font-semibold text-terra-600 bg-terra-50 self-start px-3 py-1 rounded-lg">{item.cost} баллов</span>
                                 </div>
-                                <span className="text-sm font-semibold text-terra-600 bg-terra-50 self-start px-3 py-1 rounded-lg">{item.cost} баллов</span>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
                       </div>

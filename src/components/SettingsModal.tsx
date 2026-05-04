@@ -95,7 +95,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             
             {/* ── Секция: Личный профиль ── */}
             <section>
-              <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">Личный профиль</h3>
+              <h3 className="text-sm font-semibold text-gray-900 tracking-wider mb-4">Личный профиль</h3>
               <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex gap-3 items-end">
                 <div className="flex-1 space-y-1.5">
                   <label className="text-xs font-medium text-gray-500 ml-1">Как вас называть?</label>
@@ -124,7 +124,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
             {/* ── Секция: Опасная зона ── */}
             <section>
-              <h3 className="text-sm font-semibold text-red-600 uppercase tracking-wider mb-4">Управление пространством</h3>
+              <h3 className="text-sm font-semibold text-red-600 tracking-wider mb-4">Управление пространством</h3>
               <p className="text-sm text-gray-500 mb-4">
                 Выберите, что должно произойти с вашими общими данными, если вы решите уйти.
               </p>
@@ -148,7 +148,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   <div className={`mt-0.5 ${selectedMode === 'wipe_mine' ? 'text-orange-600' : 'text-gray-400'}`}><Eraser className="w-5 h-5" /></div>
                   <div>
                     <div className={`font-semibold mb-1 ${selectedMode === 'wipe_mine' ? 'text-orange-700' : 'text-gray-900'}`}>Забрать свое</div>
-                    <div className="text-xs text-gray-500 leading-relaxed">Удалятся только созданные вами задачи, метрики и письма. Данные партнера не пострададут.</div>
+                    <div className="text-xs text-gray-500 leading-relaxed">Удалятся только созданные вами задачи, метрики и письма. Данные партнера не пострадают.</div>
                   </div>
                 </button>
 
