@@ -526,7 +526,7 @@ export function DailyPulse() {
                 <p className="text-sm text-gray-400 font-medium">Детали дня</p>
               </div>
 
-              {/* Настроение - ТЕПЕРЬ ЗАЩИЩЕНО ОТ СПАМА ЗАПРОСАМИ */}
+              {/* Настроение */}
               <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
                 <p className="text-sm font-medium text-gray-500 mb-5">Твоё настроение</p>
                 <div className="flex items-center gap-5 mb-6">
@@ -558,24 +558,61 @@ export function DailyPulse() {
               </div>
 
               {activeTab === 'partner' && pendingPoints > 0 && (
-                <div className="flex items-center justify-between bg-orange-50 border border-orange-100 p-4 rounded-xl">
-                  <div className="text-sm font-medium text-orange-800">Ждут проверки (+{pendingPoints})</div>
-                  <button onClick={handleReviewDay} className="text-sm font-medium bg-orange-500 text-white px-4 py-2 rounded-lg cursor-pointer">Подтвердить всё</button>
+                <div className="flex items-center justify-between bg-orange-50 border border-orange-200 p-4 rounded-xl">
+                  <div className="text-sm font-medium text-orange-900">Ждут проверки (+{pendingPoints})</div>
+                  <button onClick={handleReviewDay} className="text-sm font-medium bg-orange-500 text-white px-4 py-2 rounded-lg cursor-pointer shadow-sm hover:bg-orange-600 transition-colors">Подтвердить всё</button>
                 </div>
               )}
 
               <div className="space-y-3">
                 {displayedTasks.map(task => {
                   const isMyTab = activeTab === 'my';
-                  const isChecked = task.is_completed || (isMyTab && task.is_ready);
                   const isLocked = processingTasks.has(task.id);
                   
+                  // Логика визуального выделения задач, ожидающих подтверждения
+                  const isAwaitingMyConfirmation = !isMyTab && task.is_ready && !task.is_completed;
+                  const isAwaitingPartnerConfirmation = isMyTab && task.is_ready && !task.is_completed;
+
+                  // Чекбокс активен всегда для автора (Задачи партнера). 
+                  // Для исполнителя (Мои задачи) - только пока партнер не подтвердил.
+                  const isDisabled = (isMyTab && task.is_completed) || isLocked;
+                  const isChecked = task.is_completed || (isMyTab && task.is_ready);
+
+                  // Стилизация в зависимости от статуса
+                  let taskBg = 'bg-white border-gray-200';
+                  let textClass = 'text-gray-900';
+                  let pointsClass = 'text-terra-600';
+
+                  if (task.is_completed) {
+                    taskBg = 'bg-gray-50 border-transparent';
+                    textClass = 'text-gray-400 line-through';
+                    pointsClass = 'text-gray-400';
+                  } else if (isAwaitingMyConfirmation) {
+                    taskBg = 'bg-orange-50 border-orange-200';
+                    textClass = 'text-orange-900';
+                    pointsClass = 'text-orange-600';
+                  } else if (isAwaitingPartnerConfirmation) {
+                    taskBg = 'bg-blue-50 border-blue-200';
+                    textClass = 'text-blue-900';
+                    pointsClass = 'text-blue-600';
+                  }
+
                   return (
                     <div key={task.id} className={`group flex items-start gap-3 relative pr-8 ${isLocked ? 'opacity-50 pointer-events-none' : ''}`}>
-                      <label className={`flex-1 flex items-start gap-3 p-4 rounded-xl border transition-colors ${task.is_completed ? 'bg-gray-50 border-transparent' : 'bg-white border-gray-200'} cursor-pointer`}>
-                        <input type="checkbox" className="mt-1 w-5 h-5 rounded border-gray-300 text-terra-500 cursor-pointer disabled:opacity-50" checked={isChecked} disabled={task.is_completed || isLocked} onChange={() => { if (isMyTab) handleToggleReady(task.id, task.is_ready); else handleToggleCompleted(task.id, task.is_completed); }} />
-                        <span className={`flex-1 text-base font-medium ${isChecked ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{task.content}</span>
-                        <span className="text-sm font-semibold text-terra-600">+{task.points}</span>
+                      <label className={`flex-1 flex items-start gap-3 p-4 rounded-xl border transition-colors ${taskBg} cursor-pointer`}>
+                        <input 
+                          type="checkbox" 
+                          className="mt-1 w-5 h-5 rounded border-gray-300 text-terra-500 cursor-pointer disabled:opacity-50" 
+                          checked={isChecked} 
+                          disabled={isDisabled} 
+                          onChange={() => { if (isMyTab) handleToggleReady(task.id, task.is_ready); else handleToggleCompleted(task.id, task.is_completed); }} 
+                        />
+                        <span className={`flex-1 text-base font-medium ${textClass}`}>
+                          {task.content}
+                          {isAwaitingMyConfirmation && <span className="block text-xs font-semibold opacity-70 mt-1">Ожидает вашего подтверждения</span>}
+                          {isAwaitingPartnerConfirmation && <span className="block text-xs font-semibold opacity-70 mt-1">Ожидает подтверждения партнера</span>}
+                        </span>
+                        <span className={`text-sm font-semibold ${pointsClass}`}>+{task.points}</span>
                       </label>
                       {!isMyTab && !task.is_completed && (
                         <button 
