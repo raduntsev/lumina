@@ -13,12 +13,12 @@ import {
   Plus, 
   X, 
   Copy, 
-  BookmarkPlus, 
   Heart, 
   Zap, 
   Sparkles, 
   Trash2, 
-  ListPlus 
+  ListPlus,
+  Lock
 } from 'lucide-react';
 import supabase from '@/lib/supabase';
 import { useSpaceAuth } from '@/hooks/useSpaceAuth';
@@ -94,10 +94,11 @@ export function DailyPulse() {
   const [newSetTitle, setNewSetTitle] = useState('');
   const [newSetTasks, setNewSetTasks] = useState<TemplateTask[]>([{ content: '', points: 1 }]);
 
-  const [myMood, setMyMood] = useState<number | null>(null);
-  const [partnerMood, setPartnerMood] = useState<number | null>(null);
+  // Локальные состояния для метрик дня
+  const [myMood, setMyMood] = useState<number>(5);
   const [myIntimacy, setMyIntimacy] = useState(false);
   const [myConflict, setMyConflict] = useState(false);
+  const [partnerMood, setPartnerMood] = useState<number | null>(null);
 
   // Состояние для блокировки спам-кликов по задачам
   const [processingTasks, setProcessingTasks] = useState<Set<string>>(new Set());
@@ -207,17 +208,10 @@ export function DailyPulse() {
     const myTodayMetric = dayData?.metrics.find(m => m.user_id === currentUserId);
     const partnerTodayMetric = dayData?.metrics.find(m => m.user_id !== currentUserId);
 
-    if (myTodayMetric) {
-      setMyMood(myTodayMetric.mood_score); setMyIntimacy(myTodayMetric.has_intimacy); setMyConflict(myTodayMetric.has_conflict);
-    } else {
-      setMyMood(null); setMyIntimacy(false); setMyConflict(false);
-    }
-
-    if (partnerTodayMetric) {
-      setPartnerMood(partnerTodayMetric.mood_score);
-    } else {
-      setPartnerMood(null);
-    }
+    setMyMood(myTodayMetric?.mood_score ?? 5);
+    setMyIntimacy(myTodayMetric?.has_intimacy ?? false);
+    setMyConflict(myTodayMetric?.has_conflict ?? false);
+    setPartnerMood(partnerTodayMetric?.mood_score ?? null);
   }, [selectedDate, monthData, currentUserId]);
 
   // ── Обработчики (Защищенные от спама и рассинхрона) ──────────────────
@@ -402,6 +396,16 @@ export function DailyPulse() {
   const pendingPoints = displayedTasks.filter(t => t.is_ready && !t.is_completed).reduce((sum, t) => sum + t.points, 0);
   const totalPoints = displayedTasks.reduce((sum, t) => sum + t.points, 0);
 
+  // Состояние синхронизации метрик
+  const dayDataLocal = monthData.find(d => d.date === selectedDateStr);
+  const mySavedMetric = dayDataLocal?.metrics.find(m => m.user_id === currentUserId);
+  const savedMood = mySavedMetric?.mood_score ?? null;
+  const savedInt = mySavedMetric?.has_intimacy ?? false;
+  const savedConf = mySavedMetric?.has_conflict ?? false;
+
+  // Проверка: есть ли несохраненные изменения
+  const isMetricsChanged = myMood !== (savedMood ?? 5) || myIntimacy !== savedInt || myConflict !== savedConf || savedMood === null;
+
   const getDayStyle = (dateStr: string) => {
     const data = monthData.find(d => d.date === dateStr);
     if (!data || data.metrics.length === 0) return { backgroundColor: 'transparent' };
@@ -552,31 +556,60 @@ export function DailyPulse() {
               <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
                 <div className="flex justify-between items-center mb-5">
                   <p className="text-sm font-medium text-gray-500">Твоё настроение</p>
+                  
+                  {/* Логика показа партнера */}
                   {partnerMood !== null && (
-                    <div className="text-xs font-semibold px-2.5 py-1 bg-white border border-gray-200 text-gray-600 rounded-lg flex items-center gap-1.5 shadow-sm">
-                      Партнер: <span className="text-gray-900">{partnerMood}/10</span>
-                    </div>
+                    savedMood !== null ? (
+                      <div className="text-xs font-semibold px-2.5 py-1 bg-white border border-gray-200 text-gray-600 rounded-lg flex items-center gap-1.5 shadow-sm">
+                        Партнер: <span className="text-gray-900">{partnerMood}/10</span>
+                      </div>
+                    ) : (
+                      <div className="text-xs font-semibold px-2.5 py-1 bg-gray-100 border border-gray-200 text-gray-400 rounded-lg flex items-center gap-1.5 shadow-inner cursor-help" title="Отправьте свое настроение, чтобы увидеть оценку партнера">
+                        Партнер: <span className="blur-[3px] select-none text-gray-800">5/10</span>
+                        <Lock className="w-3 h-3 text-gray-400 ml-0.5" />
+                      </div>
+                    )
                   )}
                 </div>
+
                 <div className="flex items-center gap-5 mb-6">
-                  <span className="text-4xl font-bold text-gray-900 w-10 text-center">{myMood !== null ? myMood : '-'}</span>
+                  <span className="text-4xl font-bold text-gray-900 w-10 text-center">{myMood}</span>
                   <input 
                     type="range" 
                     min="1" 
                     max="10" 
-                    value={myMood || 5} 
+                    value={myMood} 
                     onChange={(e) => setMyMood(Number(e.target.value))} 
-                    onMouseUp={(e) => saveMetrics(Number((e.target as HTMLInputElement).value), myIntimacy, myConflict)}
-                    onTouchEnd={(e) => saveMetrics(Number((e.target as HTMLInputElement).value), myIntimacy, myConflict)}
                     className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-terra-500" 
                   />
-                  {myMood !== null && (
-                    <button onClick={() => { setMyMood(null); saveMetrics(null, myIntimacy, myConflict); }} className="p-2 text-gray-300 hover:text-red-500 transition-colors cursor-pointer"><X className="w-5 h-5" /></button>
+                  {savedMood !== null && (
+                    <button 
+                      onClick={() => { setMyMood(5); saveMetrics(null, myIntimacy, myConflict); }} 
+                      className="p-2 text-gray-300 hover:text-red-500 transition-colors cursor-pointer"
+                      title="Сбросить оценку"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
                   )}
                 </div>
-                <div className="flex gap-4">
-                  <button onClick={() => { setMyIntimacy(!myIntimacy); saveMetrics(myMood, !myIntimacy, myConflict); }} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${myIntimacy ? 'bg-white border-2 border-terra-500 text-terra-500 shadow-md' : 'bg-white border border-gray-200 text-gray-400'}`}><Heart className={`w-5 h-5 ${myIntimacy ? 'fill-terra-500' : ''}`} /></button>
-                  <button onClick={() => { setMyConflict(!myConflict); saveMetrics(myMood, myIntimacy, !myConflict); }} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${myConflict ? 'bg-gray-900 text-white shadow-md' : 'bg-white border border-gray-200 text-gray-400'}`}><Zap className="w-5 h-5" /></button>
+
+                <div className="flex gap-4 items-center">
+                  <button onClick={() => setMyIntimacy(!myIntimacy)} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${myIntimacy ? 'bg-white border-2 border-terra-500 text-terra-500 shadow-md' : 'bg-white border border-gray-200 text-gray-400'}`}>
+                    <Heart className={`w-5 h-5 ${myIntimacy ? 'fill-terra-500' : ''}`} />
+                  </button>
+                  <button onClick={() => setMyConflict(!myConflict)} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${myConflict ? 'bg-gray-900 text-white shadow-md' : 'bg-white border border-gray-200 text-gray-400'}`}>
+                    <Zap className="w-5 h-5" />
+                  </button>
+                  
+                  {/* Кнопка отправки появляется при несохраненных изменениях */}
+                  {isMetricsChanged && (
+                    <button 
+                      onClick={() => saveMetrics(myMood, myIntimacy, myConflict)} 
+                      className="ml-auto px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-black transition-colors shadow-sm cursor-pointer"
+                    >
+                      {savedMood === null ? 'Отправить' : 'Обновить'}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -731,7 +764,7 @@ export function DailyPulse() {
                         </div>
                       )}
 
-                      {/* Секция сохраненных шаблонов (С АККОРДЕОНОМ) */}
+                      {/* Секция сохраненных шаблонов */}
                       {!isAddingTask && !isCreatingSet && templateSets.length > 0 && (
                         <div className="space-y-3">
                           <p className="text-sm font-medium text-gray-500">Ваши наборы</p>
