@@ -6,7 +6,9 @@ import { ru } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ChevronLeft, 
-  ChevronRight, 
+  ChevronRight,
+  ChevronDown,
+  ChevronUp, 
   CheckCircle2, 
   Plus, 
   X, 
@@ -78,6 +80,7 @@ export function DailyPulse() {
 
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templateSets, setTemplateSets] = useState<TemplateSet[]>([]);
+  const [expandedSets, setExpandedSets] = useState<Set<string>>(new Set());
 
   const [activeTab, setActiveTab] = useState<'my' | 'partner'>('my');
   const [viewMode, setViewMode] = useState<'my' | 'partner' | 'combined'>('combined');
@@ -92,6 +95,7 @@ export function DailyPulse() {
   const [newSetTasks, setNewSetTasks] = useState<TemplateTask[]>([{ content: '', points: 1 }]);
 
   const [myMood, setMyMood] = useState<number | null>(null);
+  const [partnerMood, setPartnerMood] = useState<number | null>(null);
   const [myIntimacy, setMyIntimacy] = useState(false);
   const [myConflict, setMyConflict] = useState(false);
 
@@ -199,11 +203,20 @@ export function DailyPulse() {
   useEffect(() => {
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
     const dayData = monthData.find(d => d.date === dateStr);
+    
     const myTodayMetric = dayData?.metrics.find(m => m.user_id === currentUserId);
+    const partnerTodayMetric = dayData?.metrics.find(m => m.user_id !== currentUserId);
+
     if (myTodayMetric) {
       setMyMood(myTodayMetric.mood_score); setMyIntimacy(myTodayMetric.has_intimacy); setMyConflict(myTodayMetric.has_conflict);
     } else {
       setMyMood(null); setMyIntimacy(false); setMyConflict(false);
+    }
+
+    if (partnerTodayMetric) {
+      setPartnerMood(partnerTodayMetric.mood_score);
+    } else {
+      setPartnerMood(null);
     }
   }, [selectedDate, monthData, currentUserId]);
 
@@ -368,6 +381,15 @@ export function DailyPulse() {
     });
   };
 
+  const toggleExpandedSet = (setId: string) => {
+    setExpandedSets(prev => {
+      const next = new Set(prev);
+      if (next.has(setId)) next.delete(setId);
+      else next.add(setId);
+      return next;
+    });
+  };
+
   // ── Вспомогательные функции UI ────────────────────────────────────────
 
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -528,7 +550,14 @@ export function DailyPulse() {
 
               {/* Настроение */}
               <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
-                <p className="text-sm font-medium text-gray-500 mb-5">Твоё настроение</p>
+                <div className="flex justify-between items-center mb-5">
+                  <p className="text-sm font-medium text-gray-500">Твоё настроение</p>
+                  {partnerMood !== null && (
+                    <div className="text-xs font-semibold px-2.5 py-1 bg-white border border-gray-200 text-gray-600 rounded-lg flex items-center gap-1.5 shadow-sm">
+                      Партнер: <span className="text-gray-900">{partnerMood}/10</span>
+                    </div>
+                  )}
+                </div>
                 <div className="flex items-center gap-5 mb-6">
                   <span className="text-4xl font-bold text-gray-900 w-10 text-center">{myMood !== null ? myMood : '-'}</span>
                   <input 
@@ -702,17 +731,53 @@ export function DailyPulse() {
                         </div>
                       )}
 
-                      {/* Секция сохраненных шаблонов */}
+                      {/* Секция сохраненных шаблонов (С АККОРДЕОНОМ) */}
                       {!isAddingTask && !isCreatingSet && templateSets.length > 0 && (
                         <div className="space-y-3">
                           <p className="text-sm font-medium text-gray-500">Ваши наборы</p>
-                          {templateSets.map(set => (
-                            <div key={set.id} className="border border-gray-200 rounded-2xl p-4 bg-white shadow-sm flex flex-col group relative">
-                              <h4 className="font-semibold text-gray-900 mb-2">{set.title}</h4>
-                              <button onClick={() => handleUseTemplateSet(set)} className="w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-sm hover:bg-black transition-colors"><CheckCircle2 className="w-4 h-4" /> Добавить (+{set.totalPoints})</button>
-                              <button onClick={() => handleDeleteTemplate(set.id, true)} className="absolute -top-2 -right-2 bg-white border border-gray-200 p-1.5 rounded-full text-gray-400 opacity-100 sm:opacity-0 group-hover:opacity-100 hover:text-red-500 cursor-pointer shadow-sm transition-opacity"><X className="w-4 h-4"/></button>
-                            </div>
-                          ))}
+                          {templateSets.map(set => {
+                            const isExpanded = expandedSets.has(set.id);
+                            return (
+                              <div key={set.id} className="border border-gray-200 rounded-2xl p-4 bg-white shadow-sm flex flex-col group relative">
+                                <div 
+                                  className="flex justify-between items-center mb-3 cursor-pointer select-none"
+                                  onClick={() => toggleExpandedSet(set.id)}
+                                >
+                                  <h4 className="font-semibold text-gray-900">{set.title}</h4>
+                                  <button className="text-gray-400 group-hover:text-gray-600 transition-colors">
+                                    {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                  </button>
+                                </div>
+                                
+                                <AnimatePresence>
+                                  {isExpanded && (
+                                    <motion.div
+                                      initial={{ height: 0, opacity: 0 }}
+                                      animate={{ height: 'auto', opacity: 1 }}
+                                      exit={{ height: 0, opacity: 0 }}
+                                      className="overflow-hidden mb-3"
+                                    >
+                                      <div className="space-y-1.5 border-t border-gray-100 pt-3">
+                                        {set.tasks.map((t, idx) => (
+                                          <div key={idx} className="flex justify-between items-center text-sm px-3 py-2 bg-gray-50 rounded-lg">
+                                            <span className="text-gray-600 truncate mr-2">{t.content}</span>
+                                            <span className="font-semibold text-terra-600 shrink-0">+{t.points}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+
+                                <button onClick={() => handleUseTemplateSet(set)} className="w-full py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-sm hover:bg-black transition-colors">
+                                  <CheckCircle2 className="w-4 h-4" /> Добавить (+{set.totalPoints})
+                                </button>
+                                <button onClick={() => handleDeleteTemplate(set.id, true)} className="absolute -top-2 -right-2 bg-white border border-gray-200 p-1.5 rounded-full text-gray-400 opacity-100 sm:opacity-0 group-hover:opacity-100 hover:text-red-500 cursor-pointer shadow-sm transition-opacity">
+                                  <X className="w-4 h-4"/>
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </>
