@@ -696,8 +696,8 @@ export function DailyPulse() {
                   }
 
                   return (
-                    <div key={task.id} className={`group flex items-start gap-3 relative pr-8 ${isLocked ? 'opacity-50 pointer-events-none' : ''}`}>
-                      <label className={`flex-1 flex items-start gap-3 p-4 rounded-xl border transition-colors ${taskBg} cursor-pointer`}>
+                    <div key={task.id} className={`group relative ${isLocked ? 'opacity-50 pointer-events-none' : ''}`}>
+                      <label className={`flex items-start gap-3 p-4 rounded-xl border transition-colors ${taskBg} cursor-pointer w-full`}>
                         <input 
                           type="checkbox" 
                           className="mt-1 w-5 h-5 rounded border-gray-300 text-terra-500 cursor-pointer disabled:opacity-50" 
@@ -712,13 +712,14 @@ export function DailyPulse() {
                         </span>
                         <span className={`text-sm font-semibold ${pointsClass}`}>+{task.points}</span>
                       </label>
+                      
                       {!isMyTab && !task.is_completed && (
                         <button 
                           onClick={() => handleDeleteTask(task.id)} 
                           disabled={isLocked}
-                          className="absolute right-0 -top-1 bg-white border border-gray-200 rounded-full p-2 opacity-100 sm:opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 cursor-pointer shadow-sm transition-opacity"
+                          className="absolute -top-2 -right-2 bg-white border border-gray-200 p-1.5 rounded-full text-gray-400 opacity-100 sm:opacity-0 group-hover:opacity-100 hover:text-red-500 cursor-pointer shadow-sm transition-opacity z-10"
                         >
-                          <X className="w-3.5 h-3.5" />
+                          <X className="w-4 h-4" />
                         </button>
                       )}
                     </div>
