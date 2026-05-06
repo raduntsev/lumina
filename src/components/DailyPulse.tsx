@@ -18,7 +18,8 @@ import {
   Sparkles, 
   Trash2, 
   ListPlus,
-  Lock
+  Lock,
+  MessageSquareText
 } from 'lucide-react';
 import supabase from '@/lib/supabase';
 import { useSpaceAuth } from '@/hooks/useSpaceAuth';
@@ -40,6 +41,7 @@ interface DailyMetric {
   mood_score: number | null;
   has_intimacy: boolean;
   has_conflict: boolean;
+  note?: string | null; // Добавлено поле для заметки
 }
 
 interface DayData {
@@ -98,7 +100,10 @@ export function DailyPulse() {
   const [myMood, setMyMood] = useState<number>(5);
   const [myIntimacy, setMyIntimacy] = useState(false);
   const [myConflict, setMyConflict] = useState(false);
+  const [myNote, setMyNote] = useState<string>('');
+  
   const [partnerMood, setPartnerMood] = useState<number | null>(null);
+  const [partnerNote, setPartnerNote] = useState<string | null>(null);
 
   // Состояние для блокировки спам-кликов по задачам
   const [processingTasks, setProcessingTasks] = useState<Set<string>>(new Set());
@@ -211,24 +216,32 @@ export function DailyPulse() {
     setMyMood(myTodayMetric?.mood_score ?? 5);
     setMyIntimacy(myTodayMetric?.has_intimacy ?? false);
     setMyConflict(myTodayMetric?.has_conflict ?? false);
+    setMyNote(myTodayMetric?.note || '');
+
     setPartnerMood(partnerTodayMetric?.mood_score ?? null);
+    setPartnerNote(partnerTodayMetric?.note || null);
   }, [selectedDate, monthData, currentUserId]);
 
   // ── Обработчики (Защищенные от спама и рассинхрона) ──────────────────
 
-  const saveMetrics = async (val: number | null, intim: boolean, conf: boolean) => {
+  const saveMetrics = async (val: number | null, intim: boolean, conf: boolean, note: string) => {
     if (!spaceId || !currentUserId) return;
     await supabase.from('daily_metrics').upsert({
-      space_id: spaceId, user_id: currentUserId, date: format(selectedDate, 'yyyy-MM-dd'), mood_score: val, has_intimacy: intim, has_conflict: conf
+      space_id: spaceId, 
+      user_id: currentUserId, 
+      date: format(selectedDate, 'yyyy-MM-dd'), 
+      mood_score: val, 
+      has_intimacy: intim, 
+      has_conflict: conf,
+      note: note.trim()
     }, { onConflict: 'user_id, date' });
     fetchMonthActivity();
   };
 
   const handleToggleReady = async (taskId: string, currentReady: boolean) => {
-    if (processingTasks.has(taskId)) return; // Блокировка от спам-кликов
+    if (processingTasks.has(taskId)) return; 
     setProcessingTasks(prev => new Set(prev).add(taskId));
 
-    // Оптимистичный UI
     setTasksByDate(prev => ({ ...prev, [selectedDateStr]: prev[selectedDateStr].map(t => t.id === taskId ? { ...t, is_ready: !currentReady } : t) }));
     
     const { data, error } = await supabase.from('checklist_items')
@@ -402,9 +415,10 @@ export function DailyPulse() {
   const savedMood = mySavedMetric?.mood_score ?? null;
   const savedInt = mySavedMetric?.has_intimacy ?? false;
   const savedConf = mySavedMetric?.has_conflict ?? false;
+  const savedNote = mySavedMetric?.note || '';
 
-  // Проверка: есть ли несохраненные изменения
-  const isMetricsChanged = myMood !== (savedMood ?? 5) || myIntimacy !== savedInt || myConflict !== savedConf || savedMood === null;
+  // Проверка: есть ли несохраненные изменения (включая заметку)
+  const isMetricsChanged = myMood !== (savedMood ?? 5) || myIntimacy !== savedInt || myConflict !== savedConf || myNote !== savedNote || savedMood === null;
 
   const getDayStyle = (dateStr: string) => {
     const data = monthData.find(d => d.date === dateStr);
@@ -517,6 +531,7 @@ export function DailyPulse() {
                         <div className="flex flex-wrap gap-0.5 sm:gap-1 items-center w-1/3">
                           {myM?.has_intimacy && <Heart className="w-3 h-3 sm:w-4 sm:h-4 text-terra-600 fill-terra-600" />}
                           {myM?.has_conflict && <Zap className="w-3 h-3 sm:w-4 sm:h-4 text-gray-900" />}
+                          {myM?.note && <MessageSquareText className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />}
                         </div>
                       ) : <div className="w-1/3" />}
 
@@ -527,6 +542,7 @@ export function DailyPulse() {
 
                       {(viewMode === 'partner' || viewMode === 'combined') ? (
                         <div className="flex flex-wrap gap-0.5 sm:gap-1 items-center justify-end w-1/3">
+                          {partnerM?.note && <MessageSquareText className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 opacity-60" />}
                           {partnerM?.has_conflict && <Zap className="w-3 h-3 sm:w-4 sm:h-4 text-white drop-shadow-sm" />}
                           {partnerM?.has_intimacy && <Heart className="w-3 h-3 sm:w-4 sm:h-4 text-gray-900 fill-gray-900 opacity-60" />}
                         </div>
@@ -552,7 +568,7 @@ export function DailyPulse() {
                 <p className="text-sm text-gray-400 font-medium">Детали дня</p>
               </div>
 
-              {/* Настроение */}
+              {/* Настроение и Заметки */}
               <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
                 <div className="flex justify-between items-center mb-5">
                   <p className="text-sm font-medium text-gray-500">Твоё настроение</p>
@@ -584,13 +600,23 @@ export function DailyPulse() {
                   />
                   {savedMood !== null && (
                     <button 
-                      onClick={() => { setMyMood(5); saveMetrics(null, myIntimacy, myConflict); }} 
+                      onClick={() => { setMyMood(5); setMyNote(''); saveMetrics(null, myIntimacy, myConflict, ''); }} 
                       className="p-2 text-gray-300 hover:text-red-500 transition-colors cursor-pointer"
                       title="Сбросить оценку"
                     >
                       <X className="w-5 h-5" />
                     </button>
                   )}
+                </div>
+
+                {/* Текстовая заметка пользователя */}
+                <div className="mb-6">
+                  <textarea
+                    value={myNote}
+                    onChange={(e) => setMyNote(e.target.value)}
+                    placeholder="Добавь контекст к оценке... (партнер увидит это)"
+                    className="w-full bg-white/60 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-terra-400 focus:bg-white transition-colors resize-none h-20 placeholder:text-gray-400"
+                  />
                 </div>
 
                 <div className="flex gap-4 items-center">
@@ -604,13 +630,23 @@ export function DailyPulse() {
                   {/* Кнопка отправки появляется при несохраненных изменениях */}
                   {isMetricsChanged && (
                     <button 
-                      onClick={() => saveMetrics(myMood, myIntimacy, myConflict)} 
+                      onClick={() => saveMetrics(myMood, myIntimacy, myConflict, myNote)} 
                       className="ml-auto px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-black transition-colors shadow-sm cursor-pointer"
                     >
                       {savedMood === null ? 'Отправить' : 'Обновить'}
                     </button>
                   )}
                 </div>
+
+                {/* Заметка партнера (Показывается только если открыты метрики) */}
+                {partnerMood !== null && savedMood !== null && partnerNote && (
+                  <div className="mt-5 pt-5 border-t border-gray-100">
+                    <p className="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wide">Заметка партнера</p>
+                    <p className="text-sm text-gray-700 leading-relaxed bg-white/60 p-3.5 rounded-xl border border-gray-100 italic">
+                      «{partnerNote}»
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Список задач */}
